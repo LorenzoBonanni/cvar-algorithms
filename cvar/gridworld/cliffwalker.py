@@ -1,6 +1,6 @@
 from collections import namedtuple
+import matplotlib.pyplot as plt
 import numpy as np
-
 
 # helper data structures:
 # a state is given by row and column positions designated (y, x)
@@ -9,6 +9,8 @@ State = namedtuple('State', ['y', 'x'])
 # encapsulates a transition to state and its probability
 Transition = namedtuple('Transition', ['state', 'prob', 'reward'])  # transition to state with probability prob
 
+def rgb2gray(rgb):
+    return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
 
 class GridWorld:
     """ Cliffwalker. """
@@ -21,29 +23,23 @@ class GridWorld:
     FALL_REWARD = -40
     ACTION_NAMES = {ACTION_LEFT: "Left", ACTION_RIGHT: "Right", ACTION_UP: "Up", ACTION_DOWN: "Down"}
 
-    def __init__(self, height, width, random_action_p=0.1, risky_p_loss=0.15):
-
-        self.height, self.width = height, width
+    def __init__(self, height, width, random_action_p=0.1, risky_p_loss=0.15, path=None):
         self.risky_p_loss = risky_p_loss
         self.random_action_p = random_action_p
 
         # self.risky_goal_states = {State(0, 5)}
         self.risky_goal_states = {}
+        im = plt.imread(path)
+        im = rgb2gray(im)
+        self.height, self.width =  im.shape
+        cliff = np.where(im == 0)
 
-        self.initial_state = State(self.height - 1, 0)
-        self.goal_states = {State(self.height - 1, self.width - 1)}
+        goal_pos = (1, 15)
+        start_pos = (12, 15)
+        self.initial_state = State(start_pos[0], start_pos[1])
+        self.goal_states = {State(goal_pos[0], goal_pos[1])}
 
-        self.cliff_states = set()
-        if height != 1:
-            for x in range(width):
-                for y in range(height):
-                    s = State(y, x)
-                    p_cliff = 0.1 * (y / height)**2 * bool(x > 1 and y > 0 and x < width-2 and y < height-1)
-                    if s == self.initial_state or s in self.goal_states:
-                        continue
-
-                    if np.random.random() < p_cliff:
-                        self.cliff_states.add(s)
+        self.cliff_states = set(State(cs[0], cs[1]) for cs in zip(*cliff))
 
     def states(self):
         """ iterator over all possible states """
@@ -112,12 +108,12 @@ if __name__ == '__main__':
     from cvar.gridworld.plots.grid import grid_plot
     import matplotlib.pyplot as plt
 
-    world = GridWorld(40, 60)
+    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
     grid_plot(world)
     plt.show()
-    for i in range(20):
-        print('seed=', i)
-        np.random.seed(i)
-        world = GridWorld(40, 60)
-        grid_plot(world)
-        plt.show()
+    # for i in range(20):
+    #     print('seed=', i)
+    #     np.random.seed(i)
+    #     world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    #     grid_plot(world)
+    #     plt.show()

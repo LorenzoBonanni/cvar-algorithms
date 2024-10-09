@@ -10,6 +10,7 @@ _from_t: extract the desired value from weighted list of distributions
 
 """
 import numpy as np
+from pulp import CPLEX_PY, PULP_CBC_CMD
 
 
 # ===================================================================
@@ -127,9 +128,11 @@ def single_yc_lp_from_t(transition_p, t_atoms, yc_values, alpha, xis=False):
 
     prob = LpProblem(name='tamar')
 
+    # xi boundaries
     for xi in Xi:
         prob.addConstraint(0 <= xi)
         prob.addConstraint(xi <= 1./alpha)
+    # xi * t = 1, meaning that the perturbed distribution is a valid distribution
     prob.addConstraint(sum([xi*p for xi, p in zip(Xi, transition_p)]) == 1)
 
     for xi, i, yc, atoms in zip(Xi, I, yc_values, t_atoms):
@@ -138,17 +141,22 @@ def single_yc_lp_from_t(transition_p, t_atoms, yc_values, alpha, xis=False):
         atom_p = atoms[1:] - atoms[:-1]
         for ix in range(len(yc)):
             # linear interpolation as a solution to 'y = kx + q'
+
+            # k = (y[idx]*c[idx] - y[idx-1]*c[idx-1]) / (y[idx] - y[idx-1])
             k = (yc[ix]-last_yc)/atom_p[ix]
 
+            # q = y[idx]*c[idx] - k*y[idx]
+            # split k * (y*xi-y_i) into two parts that's why we have the minus
             q = last_yc - k * atoms[ix]
+            # i >= k *xi * alpha + q
+            # here alpha is the y_i in the equation
             prob.addConstraint(i >= k * xi * alpha + q)
             f_params.append((k, q))
             last_yc = yc[ix]
 
     # opt criterion
     prob.setObjective(sum([i * p for i, p in zip(I, transition_p)]))
-
-    prob.solve()
+    prob.solve(PULP_CBC_CMD(msg=False))
 
     if xis:
         return value(prob.objective), [value(xi)*alpha for xi in Xi]
@@ -265,8 +273,8 @@ def v_yc_from_t_lp(atoms, transition_p, t_yc, t_atoms):
     """ CVaR computation by dual decomposition LP. """
     y_cvar = [single_yc_lp_from_t(transition_p, t_atoms, t_yc, alpha) for alpha in atoms[1:]]
     # extract vars:
-    var = yc_to_var(atoms, y_cvar)
-
+    # var = yc_to_var(atoms, y_cvar)
+    var = None
     return var, y_cvar
 
 

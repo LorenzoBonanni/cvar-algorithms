@@ -4,6 +4,7 @@ from cvar.gridworld.core import cvar_computation
 from cvar.gridworld.core.constants import gamma
 from cvar.gridworld.core.runs import epoch
 from cvar.gridworld.algorithms.value_iteration import value_iteration
+import numpy as np
 
 
 def several_epochs(arg):
@@ -72,8 +73,8 @@ if __name__ == '__main__':
 
     np.random.seed(2)
     # ============================= new config
-    world = GridWorld(10, 15, random_action_p=0.1)
-    V = value_iteration(world, max_iters=10000, eps_convergence=1e-5)
+    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    V = value_iteration(world, max_iters=10_000, eps_convergence=1e-5)
     pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
 
     # ============================= load

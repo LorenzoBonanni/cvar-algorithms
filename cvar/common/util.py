@@ -23,7 +23,7 @@ def timed(func):
     return func_wrapper
 
 
-@print_output('ATOMS:')
+# @print_output('ATOMS:')
 def spaced_atoms(nb_atoms, spacing, log_atoms, log_threshold):
     assert log_atoms <= nb_atoms
     assert spacing > 1

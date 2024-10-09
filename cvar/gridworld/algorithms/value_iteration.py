@@ -3,10 +3,11 @@ from cvar.gridworld.cliffwalker import *
 from cvar.gridworld.core import cvar_computation
 from cvar.gridworld.core.constants import *
 from cvar.common.util import timed, spaced_atoms
+from tqdm import tqdm
 
 # use LP when computing CVaRs
-# TAMAR_LP = True
-TAMAR_LP = False
+TAMAR_LP = True
+# TAMAR_LP = False
 
 
 class ValueFunction:
@@ -18,7 +19,7 @@ class ValueFunction:
         for ix in np.ndindex(self.V.shape):
             self.V[ix] = MarkovState()
 
-        print('ATOMS:', list(self.V[0, 0].atoms))
+        # print('ATOMS:', list(self.V[0, 0].atoms))
 
     def update(self, y, x, check_bound=False):
 
@@ -246,9 +247,9 @@ class MarkovState:
 
 
 def value_update(world, V, id=0, figax=None):
-
     V_ = copy.deepcopy(V)
-    for s in world.states():
+    for s in tqdm(world.states(), desc='Value Update %d' % id):
+    # for s in world.states():
         V_.update(s.y, s.x)
 
     return V_
@@ -277,9 +278,10 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
     i = 0
     figax = None
     while True:
-        if i == 28:
-            import matplotlib.pyplot as plt
-            figax = plt.subplots(1, 2)
+        # print('Iteration:', i)
+        # if i == 28:
+        #     import matplotlib.pyplot as plt
+        #     figax = plt.subplots(1, 2)
         V_ = value_update(world, V, i, figax)
 
         error, worst_state = value_difference(V, V_, world)
