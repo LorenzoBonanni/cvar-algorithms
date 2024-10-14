@@ -1,3 +1,4 @@
+from cvar.gridworld.autonomous_car import AutonomousCarNavigation
 from cvar.gridworld.core.constants import gamma
 from cvar.gridworld.cliffwalker import *
 from cvar.gridworld.core import cvar_computation
@@ -73,7 +74,8 @@ if __name__ == '__main__':
 
     np.random.seed(2)
     # ============================= new config
-    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    world = AutonomousCarNavigation()
     V = value_iteration(world, max_iters=10_000, eps_convergence=1e-5)
     pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
 

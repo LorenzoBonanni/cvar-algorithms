@@ -23,7 +23,7 @@ class GridWorld:
     FALL_REWARD = -40
     ACTION_NAMES = {ACTION_LEFT: "Left", ACTION_RIGHT: "Right", ACTION_UP: "Up", ACTION_DOWN: "Down"}
 
-    def __init__(self, height, width, random_action_p=0.1, risky_p_loss=0.15, path=None):
+    def __init__(self, height, width, random_action_p=0.1, risky_p_loss=0.15, path=None, goal_pos=(1, 15), start_pos=(12, 15)):
         self.risky_p_loss = risky_p_loss
         self.random_action_p = random_action_p
 
@@ -34,8 +34,8 @@ class GridWorld:
         self.height, self.width =  im.shape
         cliff = np.where(im == 0)
 
-        goal_pos = (1, 15)
-        start_pos = (12, 15)
+        goal_pos = goal_pos
+        start_pos = start_pos
         self.initial_state = State(start_pos[0], start_pos[1])
         self.goal_states = {State(goal_pos[0], goal_pos[1])}
 

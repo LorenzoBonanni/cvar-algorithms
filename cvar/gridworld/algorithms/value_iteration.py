@@ -146,7 +146,7 @@ class ValueFunction:
         return p, yv
 
     def transitions(self, y, x, a):
-        for t in self.world.transitions(State(y, x))[a]:
+        for t in self.world.transitions(State(y=y, x=x))[a]:
             yield t
 
     def transition_vars(self, y, x, a):
