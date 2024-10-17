@@ -287,6 +287,7 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
         error, worst_state = value_difference(V, V_, world)
         if error < eps_convergence:
             print("value fully learned after %d iterations" % (i,))
+            print('Error:', error)
             break
         elif i > max_iters:
             print("value finished without convergence after %d iterations" % (i,))

@@ -210,7 +210,7 @@ def grid_plot(world, img=None, figax=None, sg_size=20):
     ax.text(world.initial_state.x, world.initial_state.y, 'S', ha='center', va='center', fontsize=sg_size)
     for s in world.goal_states:
         ax.text(s[1], s[0], 'G', ha='center', va='center', fontsize=sg_size)
-    for s in world.risky_goal_states:
-        ax.text(s[1], s[0], 'R', ha='center', va='center', fontsize=sg_size)
+    # for s in world.risky_goal_states:
+    #     ax.text(s[1], s[0], 'R', ha='center', va='center', fontsize=sg_size)
     return fig, ax
 

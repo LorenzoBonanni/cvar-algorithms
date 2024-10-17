@@ -1,6 +1,4 @@
-import random
 from collections import namedtuple
-from pprint import pprint
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -46,8 +44,10 @@ class AutonomousCarNavigation:
 
     def __init__(self):
         self.map = self.create_navigation_graph()
-        self.start = (0, 3)
+        self.start = State(0, 3)
+        self.initial_state = self.start
         self.goal = State(4, 0)
+        self.goal_states = {self.goal}
         self.height = 4
         self.width = 5
 
@@ -170,4 +170,4 @@ class AutonomousCarNavigation:
 # print(f"Neighbors of node (0, 0): {list(G.neighbors((0, 0)))}")
 # print("\nExample of edge data:")
 # print(f"Edge between (0, 0) and (1, 0): {G.get_edge_data((0, 0), (1, 0))}")
-AutonomousCarNavigation().transitions(State(y=0, x=4))
+# AutonomousCarNavigation().transitions(State(y=0, x=4))
