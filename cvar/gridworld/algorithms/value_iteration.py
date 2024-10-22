@@ -61,7 +61,6 @@ class ValueFunction:
 
     def next_action(self, y, x, alpha):
         if alpha == 0:
-            print('alpha=0')
             a_best = max(self.world.ACTIONS,
                          key=lambda a:cvar_computation.v_0_from_transitions(self.V, list(self.transitions(y, x, a)), gamma))
             return a_best, np.zeros(len(list(self.transitions(y, x, a_best))))

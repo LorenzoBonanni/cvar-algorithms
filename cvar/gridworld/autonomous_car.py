@@ -34,13 +34,18 @@ class AutonomousCarNavigation:
 
     # Define the probabilities of transitioning to each road type
     # Sampled from dirichlet([1, 1, 0.4])
+    # probabilities = {
+    #     'highway': np.array([[0.36755459, 0.63158533, 0.00086008]]),
+    #     'main': np.array([[0.42425342, 0.54990484, 0.02584174]]),
+    #     'street': np.array([[0.69823654, 0.23496235, 0.06680112]]),
+    #     'lane': np.array([[0.15440924, 0.8376856, 0.00790516]])
+    # }
     probabilities = {
-        'highway': np.array([[0.36755459, 0.63158533, 0.00086008]]),
-        'main': np.array([[0.42425342, 0.54990484, 0.02584174]]),
-        'street': np.array([[0.69823654, 0.23496235, 0.06680112]]),
-        'lane': np.array([[0.15440924, 0.8376856, 0.00790516]])
+        'highway': np.array([[1/3, 1/3, 1/3]]),
+        'main': np.array([[1/3, 1/3, 1/3]]),
+        'street': np.array([[1/3, 1/3, 1/3]]),
+        'lane': np.array([[1/3, 1/3, 1/3]])
     }
-
 
     def __init__(self):
         self.map = self.create_navigation_graph()

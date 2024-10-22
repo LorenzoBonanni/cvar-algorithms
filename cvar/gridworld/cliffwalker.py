@@ -85,7 +85,7 @@ class GridWorld:
                 if s_ in self.cliff_states:
                     r = self.FALL_REWARD
                     # s_ = self.initial_state
-                    s_ = next(iter(self.goal_states))
+                    # s_ = next(iter(self.goal_states))
                 else:
                     r = -1
                 p = 1.0 - self.random_action_p if a_ == a else self.random_action_p / 3

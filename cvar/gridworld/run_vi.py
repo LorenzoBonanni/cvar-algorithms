@@ -1,7 +1,10 @@
+from scipy.stats import alpha
+
 from cvar.gridworld.autonomous_car import AutonomousCarNavigation
 from cvar.gridworld.cliffwalker import GridWorld
 from cvar.gridworld.core import cvar_computation
 from cvar.gridworld.core.constants import gamma
+from cvar.gridworld.core.policies import XiBasedPolicy
 from cvar.gridworld.core.runs import epoch
 from cvar.gridworld.algorithms.value_iteration import value_iteration
 import numpy as np
@@ -24,10 +27,11 @@ def several_epochs(arg):
 def policy_stats(world, policy, alpha, nb_epochs, verbose=True):
     import copy
     import multiprocessing as mp
-    threads = 4
+    threads = 14
 
     with mp.Pool(threads) as p:
-        rewards = p.map(several_epochs, [(world, copy.deepcopy(policy), int(nb_epochs/threads)) for _ in range(threads)])
+        rewards = p.map(several_epochs,
+                        [(world, copy.deepcopy(policy), int(nb_epochs / threads)) for _ in range(threads)])
 
     rewards = np.array(rewards).flatten()
 
@@ -69,38 +73,44 @@ def exhaustive_stats(world, epochs, *args):
 
 if __name__ == '__main__':
     import pickle
-    from cvar.gridworld.plots.grid import InteractivePlotMachine
+    from cvar.gridworld.plots.grid import InteractivePlotMachine, PlotMachine
 
     np.random.seed(2)
-    # ============================= new config
-    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-    # world = AutonomousCarNavigation()
-    V = value_iteration(world, max_iters=10_000, eps_convergence=1e-5)
-    pickle.dump((world, V), open('data/models/vi_test_AC.pkl', mode='wb'))
+    # # # ============================= new config
+    # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    # # # world = AutonomousCarNavigation()
+    # V = value_iteration(world, max_iters=10_000, eps_convergence=1e-5)
+    # pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
 
     # ============================= load
-    world, V = pickle.load(open('data/models/vi_test_AC.pkl', 'rb'))
+    world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))
+    # indexes = [2, 11, 20]
+    alphas = np.concatenate(([0], np.logspace(-2, 0, 20)))
+    alphas = alphas[1:]
     # ============================= RUN
-    for alpha in np.concatenate(([0], np.logspace(-2, 0, 20))):
+    for alpha in alphas:
         print(alpha)
         pm = InteractivePlotMachine(world, V, alpha=alpha)
-        pm.show()
+        pm.fig.savefig('data/figures/vi_{}.png'.format(alpha))
+        # pm.show()
 
     # =============== VI stats
-    # nb_epochs = int(1e6)
+    # nb_epochs = int(100)
     # rewards_sample = []
     # for alpha in [0.1, 0.25, 0.5, 1.]:
-    #     _, rewards = policy_stats(world, TamarPolicy(V, alpha), alpha, nb_epochs=nb_epochs)
+    #     _, rewards = policy_stats(world, XiBasedPolicy(V, alpha), alpha, nb_epochs=nb_epochs)
     #     rewards_sample.append(rewards)
     # np.save('files/sample_rewards_tamar.npy', np.array(rewards_sample))
     # policy_stats(world, var_policy, alpha, nb_epochs=nb_epochs)
 
     # =============== plot dynamic
+    # alpha = 0.5
     # V_visual = np.array([[V.V[i, j].cvar_alpha(alpha) for j in range(len(V.V[i]))] for i in range(len(V.V))])
     # # print(V_visual)
     # plot_machine = PlotMachine(world, V_visual)
     # # policy = var_policy
-    # for i in range(100):
+    # policy = XiBasedPolicy(V, alpha)
+    # for i in range(10):
     #     S, A, R = epoch(world, policy, plot_machine=plot_machine)
     #     print('{}: {}'.format(i, np.sum(R)))
     #     policy.reset()

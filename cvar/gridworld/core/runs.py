@@ -16,12 +16,16 @@ def epoch(world, policy, max_iters=100, plot_machine=None):
     R = []
     i = 0
     t = Transition(s, 0, 0)
+    text_obj = None
     while s not in world.goal_states and i < max_iters:
         a = policy.next_action(t)
+        alpha = policy.alpha
+
         A.append(a)
 
+
         if plot_machine is not None:
-            plot_machine.step(s, a)
+            plot_machine.step(s, a, alpha)
             time.sleep(0.5)
 
         t = world.sample_transition(s, a)

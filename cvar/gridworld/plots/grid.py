@@ -39,9 +39,12 @@ class PlotMachine:
             self.ax.text(s[1], s[0], 'R', ha='center', va='center', fontsize=20)
 
         self.arrow = self.ax.add_patch(plt.Arrow(0, 0, 1, 1, color='white'))
+        self.alpha_text = None
 
-    def step(self, s, a):
-
+    def step(self, s, a, alpha):
+        if self.alpha_text is not None:
+            self.alpha_text.remove()
+        self.alpha_text = plt.text(0, 1.5, f'alpha: {alpha:.2f}', verticalalignment='top')
         self.arrow.remove()
         arrow = plt.Arrow(s.x + offsets[a][0], s.y + offsets[a][1], dirs[a][0], dirs[a][1], color='white')
         self.arrow = self.ax.add_patch(arrow)
