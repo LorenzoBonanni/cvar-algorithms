@@ -7,3 +7,4 @@ cycler~=0.12.1
 scipy~=1.14.1
 networkx~=3.4.1
 setuptools~=68.2.0
+ortools~=9.11.4210

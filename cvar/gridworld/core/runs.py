@@ -45,7 +45,7 @@ def optimal_path(world, policy):
     s = world.initial_state
     states = [s]
     t = Transition(s, 0, 0)
-    while s not in world.goal_states:
+    while s not in world.terminal_states:
         a = policy.next_action(t)
         t = max(world.transitions(s)[a], key=lambda t: t.prob)
         s = t.state

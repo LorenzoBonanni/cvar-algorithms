@@ -1,3 +1,4 @@
+import scipy
 from scipy.stats import alpha
 
 from cvar.gridworld.autonomous_car import AutonomousCarNavigation
@@ -74,20 +75,34 @@ def exhaustive_stats(world, epochs, *args):
 if __name__ == '__main__':
     import pickle
     from cvar.gridworld.plots.grid import InteractivePlotMachine, PlotMachine
+    PERFORM_VI = True
+    # MAX_ITERS = 40
+    MAX_ITERS = 100
+    TOLL = 1e-3
 
     np.random.seed(2)
-    # # # ============================= new config
-    # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-    # # # world = AutonomousCarNavigation()
-    # V = value_iteration(world, max_iters=10_000, eps_convergence=1e-5)
-    # pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
+    if PERFORM_VI:
+        world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+        # # world = AutonomousCarNavigation()
+        V = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
 
     # ============================= load
     world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))
     # indexes = [2, 11, 20]
     alphas = np.concatenate(([0], np.logspace(-2, 0, 20)))
-    alphas = alphas[1:]
+    # alphas = alphas[1:]
     # ============================= RUN
+    CvarValues = [np.array([V.V[ix].cvar_alpha(alpha) for ix in np.ndindex(V.V.shape)]).reshape(V.V.shape) for alpha in alphas]
+    CvarValues = np.array(CvarValues)
+    # CvarValues = np.array([CvarValues[i].flatten(order='F') for i in range(CvarValues.shape[0])])
+    matlabValues =  -scipy.io.loadmat('data/models/value.mat')['im']
+    # CvarValues[matlabValues == 0] = 0
+    matlab_alpha1 = matlabValues[-1, :, :]
+    python_alpha1 = CvarValues[-1, :, :]
+    # print(np.isclose(matlab_alpha1, python_alpha1, atol=1e-2).all())
+    alphas = [1.0]
+    # ============================= PLOT
     for alpha in alphas:
         print(alpha)
         pm = InteractivePlotMachine(world, V, alpha=alpha)

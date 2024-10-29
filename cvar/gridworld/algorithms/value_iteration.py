@@ -248,7 +248,6 @@ class MarkovState:
 def value_update(world, V, id=0, figax=None):
     V_ = copy.deepcopy(V)
     for s in tqdm(world.states(), desc='Value Update %d' % id):
-    # for s in world.states():
         V_.update(s.y, s.x)
 
     return V_

@@ -1,3 +1,4 @@
+import random
 from collections import namedtuple
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,7 +21,7 @@ class GridWorld:
     ACTION_UP = 2
     ACTION_DOWN = 3
     ACTIONS = [ACTION_LEFT, ACTION_RIGHT, ACTION_UP, ACTION_DOWN]
-    FALL_REWARD = -40
+    FALL_REWARD = -2
     ACTION_NAMES = {ACTION_LEFT: "Left", ACTION_RIGHT: "Right", ACTION_UP: "Up", ACTION_DOWN: "Down"}
 
     def __init__(self, height, width, random_action_p=0.1, risky_p_loss=0.15, path=None, goal_pos=(1, 15), start_pos=(12, 15)):
@@ -37,9 +38,11 @@ class GridWorld:
         goal_pos = goal_pos
         start_pos = start_pos
         self.initial_state = State(start_pos[0], start_pos[1])
+        self.absorbing_state = State(-1, -1)
         self.goal_states = {State(goal_pos[0], goal_pos[1])}
 
         self.cliff_states = set(State(cs[0], cs[1]) for cs in zip(*cliff))
+        self.terminal_states = self.goal_states | self.cliff_states | {self.absorbing_state}
 
     def states(self):
         """ iterator over all possible states """
@@ -70,27 +73,37 @@ class GridWorld:
         if s in self.goal_states:
             return [[Transition(state=s, prob=1.0, reward=0)] for a in self.ACTIONS]
 
-        if s in self.risky_goal_states:
-            goal = next(iter(self.goal_states))
-            return [[Transition(state=goal, prob=self.risky_p_loss, reward=-50),
-                     Transition(state=goal, prob=1-self.risky_p_loss, reward=100)] for a in self.ACTIONS]
+        if s == self.absorbing_state:
+            print("aaaa")
+            return [[Transition(state=s, prob=1.0, reward=self.FALL_REWARD)] for a in self.ACTIONS]
+
+        # if s in self.risky_goal_states:
+        #     goal = next(iter(self.goal_states))
+        #     return [[Transition(state=goal, prob=self.risky_p_loss, reward=-50),
+        #              Transition(state=goal, prob=1-self.risky_p_loss, reward=100)] for a in self.ACTIONS]
 
         transitions_full = []
         for a in self.ACTIONS:
-            transitions_actions = []
+            curr_states_trans = {}
 
             # over all *random* actions
             for a_ in self.ACTIONS:
                 s_ = self.target_state(s, a_)
                 if s_ in self.cliff_states:
                     r = self.FALL_REWARD
+                    s_ = self.absorbing_state
                     # s_ = self.initial_state
                     # s_ = next(iter(self.goal_states))
                 else:
                     r = -1
-                p = 1.0 - self.random_action_p if a_ == a else self.random_action_p / 3
-                if p != 0:
-                    transitions_actions.append(Transition(s_, p, r))
+                initial_trans = curr_states_trans.get((s_.y, s_.x), None)
+                prob = 1.0 - self.random_action_p if a_ == a else self.random_action_p / 3
+                if initial_trans is None:
+                    curr_states_trans[(s_.y, s_.x)] = Transition(s_, prob, r)
+                else:
+                    curr_states_trans[(s_.y, s_.x)] = Transition(s_, prob+initial_trans.prob, r)
+
+            transitions_actions = [tran for state, tran in curr_states_trans.items() if tran.prob != 0]
             transitions_full.append(transitions_actions)
 
         return transitions_full
@@ -99,7 +112,8 @@ class GridWorld:
         """ Sample a single transition, duh. """
         trans = self.transitions(s)[a]
         state_probs = [tran.prob for tran in trans]
-        return trans[np.random.choice(len(trans), p=state_probs)]
+        transition = random.choices(population=trans, weights=state_probs)[0]
+        return transition
 
 
 
