@@ -75,7 +75,7 @@ def exhaustive_stats(world, epochs, *args):
 if __name__ == '__main__':
     import pickle
     from cvar.gridworld.plots.grid import InteractivePlotMachine, PlotMachine
-    PERFORM_VI = True
+    PERFORM_VI = False
     # MAX_ITERS = 40
     MAX_ITERS = 100
     TOLL = 1e-3
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     matlab_alpha1 = matlabValues[-1, :, :]
     python_alpha1 = CvarValues[-1, :, :]
     # print(np.isclose(matlab_alpha1, python_alpha1, atol=1e-2).all())
-    alphas = [1.0]
+    # alphas = [1.0]
     # ============================= PLOT
     for alpha in alphas:
         print(alpha)

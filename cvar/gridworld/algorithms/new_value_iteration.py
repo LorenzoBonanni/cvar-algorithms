@@ -7,7 +7,7 @@ from tqdm import tqdm
 from cvar.gridworld.cliffwalker import GridWorld
 
 
-def get_position_and_probabilities(action_transitions):
+def get_transition_information(action_transitions):
     """
     Extracts positions and probabilities from action transitions.
 
@@ -21,11 +21,13 @@ def get_position_and_probabilities(action_transitions):
     """
     transitions_pos = []
     transitions_probabilities = []
+    transitions_rewards = []
     for trans in action_transitions:
         transitions_pos.append(trans.state)
         transitions_probabilities.append(trans.prob)
+        transitions_rewards.append(trans.reward)
 
-    return np.array(transitions_pos), np.array(transitions_probabilities)
+    return np.array(transitions_pos), np.array(transitions_probabilities), np.array(transitions_rewards)
 
 
 def solve_problem(solver):
@@ -43,7 +45,7 @@ def solve_problem(solver):
     Raises:
     SystemExit: If no optimal solution is found.
     """
-    solver.print_information()
+    # solver.print_information()
     solution = solver.solve()
     if solution.solve_status.value == 2:
         print('Optimal solution found')
@@ -72,7 +74,7 @@ def create_decision_variables(solver, prefix, n_vars, bounds=None, start_index=0
         start_index: Starting index for variable naming
 
     Returns:
-        np.array of decision variables, next available index
+        array of decision variables, next available index
     """
     if bounds is None:
         bounds = (0, solver.infinity)  # Default bounds
@@ -88,7 +90,7 @@ def create_decision_variables(solver, prefix, n_vars, bounds=None, start_index=0
     return variables, start_index + n_vars
 
 
-def value_update(world, V, id=0, alpha_set_all=None):
+def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
     """
     Updates the value function for the given world.
 
@@ -97,23 +99,26 @@ def value_update(world, V, id=0, alpha_set_all=None):
     V (np.array): The current value function.
     id (int, optional): The iteration id for progress display. Defaults to 0.
     alpha_set_all (np.array, optional): Array of alpha values for each state. Defaults to None.
+    discount (float, optional): The discount factor for future rewards. Defaults to 0.95.
 
     Returns:
     np.array: The updated value function.
     """
+    Pol = np.zeros_like(V, dtype=int)
     V_ = copy.deepcopy(V)
-    for s in tqdm(world.states(), desc='Value Update %d' % id):
+
+    states = list(world.states())
+    for s in tqdm(states, desc='Value Update %d' % id):
         alpha_set = alpha_set_all[s.y, s.x]
         transitions = world.transitions(s)
+        ts = np.array([])
+        solver = Model(name='cvar_value')
+        objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
+
+        counter = 0
         for alpha_idx, alpha in enumerate(alpha_set):
-            solver = Model(name='cvar_value')
-
-            counter = 0
-            objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
-
-            ts = np.array([])
             for a in world.ACTIONS:
-                transitions_pos, transitions_probabilities = get_position_and_probabilities(transitions[a])
+                transitions_pos, transitions_probabilities, _ = get_transition_information(transitions[a])
                 n_trans = len(transitions_pos)
 
                 if alpha == 0:
@@ -122,6 +127,25 @@ def value_update(world, V, id=0, alpha_set_all=None):
                     objective[a, alpha_idx] = min(V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]])
                     continue
 
+                # Create xi variables (non-negative)
+                xi, counter = create_decision_variables(
+                    solver=solver,
+                    prefix='xi',
+                    n_vars=n_trans,
+                    bounds=(0, solver.infinity),
+                    start_index=counter
+                )
+                solver.add_constraint(xi @ transitions_probabilities == 1)
+
+                # Create t variables (unrestricted)
+                t, counter = create_decision_variables(
+                    solver=solver,
+                    prefix='t',
+                    n_vars=n_trans,
+                    bounds=(-1e6, 1e6),
+                    start_index=counter
+                )
+                ts = np.append(ts, t)
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
@@ -129,36 +153,26 @@ def value_update(world, V, id=0, alpha_set_all=None):
                     v_i_next = V_[i + 1, transitions_pos[:, 0], transitions_pos[:, 1]]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
-                    # Create xi variables (non-negative)
-                    xi, counter = create_decision_variables(
-                        solver=solver,
-                        prefix='xi',
-                        n_vars=n_trans,
-                        bounds=(0, solver.infinity),
-                        start_index=counter
-                    )
-
-                    # Create t variables (unrestricted)
-                    t, counter = create_decision_variables(
-                        solver=solver,
-                        prefix='t',
-                        n_vars=n_trans,
-                        bounds=(-1e6, 1e6),
-                        start_index=counter
-                    )
-
                     right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * transitions_probabilities
                     left_ineq = t - slope * xi * transitions_probabilities
                     for idx in range(len(right_ineq)):
                         solver.add_constraint(left_ineq[idx] >= right_ineq[idx])
                         solver.add_constraint(xi[idx] <= 1 / alpha)
 
-                    solver.add_constraint(xi @ transitions_probabilities == 1)
-                    ts = np.append(ts, t)
-            if alpha == 0:
-                continue
-            solver.minimize(sum(ts))
-            solve_problem(solver)
+
+        solver.minimize(sum(ts))
+        _, t_values = solve_problem(solver)
+        # xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
+        t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
+        t_values = t_values.sum(axis=-1)
+        objective[:, 1:] = t_values
+
+        rewards = np.array([get_transition_information(transitions[a])[2] for a in world.ACTIONS])
+
+        Q = np.min(rewards[:, np.newaxis, :] + discount * objective[:, :, np.newaxis], axis=-1)
+        for alpha_idx2 in range(1, len(alpha_set)):
+            Pol[alpha_idx2, s.y, s.x] = np.argmax(Q[:, alpha_idx2])
+            V_[alpha_idx2, s.y, s.x] = Q[Pol[alpha_idx2, s.y, s.x], alpha_idx2]
 
     return V_
 
@@ -171,8 +185,9 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
     i = 0
     figax = None
     while True:
-        V_ = value_update(world, V, i, Y_set_all)
-
+        V_ = value_update(world, V, i, Y_set_all, discount=0.95)
+        error = np.max(np.abs(V - V_))
+        print('Iteration:{}, error={}'.format(i, error))
         # error, worst_state = value_difference(V, V_, world)
         # if error < eps_convergence:
         #     print("value fully learned after %d iterations" % (i,))
