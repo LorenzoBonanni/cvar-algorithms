@@ -1,8 +1,7 @@
 import copy
 
 import numpy as np
-from pulp import LpVariable, LpProblem
-from ortools.linear_solver import pywraplp
+from docplex.mp.model import Model
 from tqdm import tqdm
 
 from cvar.gridworld.cliffwalker import GridWorld
@@ -13,13 +12,14 @@ def value_update(world, V, id=0, alpha_set_all=None):
     for s in tqdm(world.states(), desc='Value Update %d' % id):
         alpha_set = alpha_set_all[s.y, s.x]
         transitions = world.transitions(s)
-        solver = pywraplp.Solver.CreateSolver("GLOP")
+        solver = Model(name='cvar_value')
 
         right_ineqs = []
         left_ineqs = []
         xi_constraints = []
         counter = 0
         objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
+        objectives_fn = []
         for a in world.ACTIONS:
             action_transitions = transitions[a]
             transitions_pos = []
@@ -34,46 +34,54 @@ def value_update(world, V, id=0, alpha_set_all=None):
             for i in range(len(alpha_set) - 1):
                 alpha_i = alpha_set[i]
                 alpha_ip1 = alpha_set[i + 1]
-                xi_summation = 0
                 n_trans = len(transitions_pos)
 
-                xi = np.array([solver.NumVar(0, solver.infinity(), f'xi_{counter + _}') for _ in range(n_trans)])
+                xi = np.array([solver.continuous_var(0, solver.infinity, f'xi_{counter+tnum}') for tnum in range(n_trans)])
                 counter += n_trans
-                t = np.array([solver.NumVar(-1e6, 1e6, 't') for _ in range(n_trans)])
+                t = np.array([solver.continuous_var(-1e6, 1e6, f't_{counter+tnum}') for tnum in range(n_trans)])
                 counter += n_trans
 
                 ts.append(t)
                 v_i = V_[i, transitions_pos[:, 0], transitions_pos[:, 1]]
-                v_ip1 =V_[i+1, transitions_pos[:, 0], transitions_pos[:, 1]]
+                v_ip1 = V_[i+1, transitions_pos[:, 0], transitions_pos[:, 1]]
                 slope = (alpha_ip1 * v_ip1 - alpha_i * v_i) / (alpha_ip1 - alpha_i)
                 right_ineq = lambda alpha_in: (alpha_i*v_i/alpha_in - slope * alpha_i/alpha_in) * transitions_probabilities
                 left_ineq = t - slope * xi * transitions_probabilities
                 right_ineqs.append(right_ineq)
                 left_ineqs.append(left_ineq)
-                xi_summation += xi * transitions_probabilities
-                xi_constraints.append(lambda alpha_in: xi <= 1/alpha_in)
-
-                solver.Minimize(sum(t))
-                solver.Add(xi_summation == 1)
+                xi_constraints.append(xi)
+                objectives_fn.append(sum(t))
+                solver.add_constraint(xi @ transitions_probabilities == 1)
 
             for alpha_idx, alpha in enumerate(alpha_set):
                 if alpha == 0:
+                    # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
                     transitions_pos = np.array(transitions_pos)
-                    objective[a, alpha_idx] = max(V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]])
+                    objective[a, alpha_idx] = min(V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]])
                 else:
                     for idx in range(len(right_ineqs)):
-                        solver.Add(left_ineqs[idx] >= right_ineqs[idx](alpha))
-                        solver.Add(xi_constraints[idx](alpha))
+                        l_ineq = left_ineqs[idx]
+                        r_ineq = right_ineqs[idx](alpha)
+                        for idx2 in range(len(l_ineq)):
+                            solver.add_constraint(l_ineq[idx2] >= r_ineq[idx2])
+                            solver.add_constraint(xi_constraints[idx][idx2] <= 1/alpha)
 
-        print(f"Solving with {solver.SolverVersion()}")
-        status = solver.Solve()
-
-        if status == pywraplp.Solver.OPTIMAL:
-            print("Solution:")
-            print(f"Objective value = {solver.Objective().Value():0.1f}")
+        solver.maximize(sum(objectives_fn))
+        solver.print_information()
+        solution = solver.solve()
+        if solution.solve_status.value == 2:
+            print('Optimal solution found')
+            solved_xi = []
+            solved_t = []
+            # TODO understand why this is not working, xi values are 1 which violates the constraints
+            for v in solver.iter_variables():
+                if v.name.startswith('xi'):
+                    solved_xi.append(v.solution_value)
+                elif v.name.startswith('t'):
+                    solved_t.append(v.solution_value)
         else:
-            print("The problem does not have an optimal solution.")
-
+            print('No optimal solution found')
+            exit(1)
     return V_
 
 
