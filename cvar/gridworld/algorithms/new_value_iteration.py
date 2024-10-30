@@ -1,7 +1,7 @@
 import copy
 
 import numpy as np
-from docplex.mp.model import Model
+from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, PULP_CBC_CMD, CPLEX_PY
 from tqdm import tqdm
 
 from cvar.gridworld.cliffwalker import GridWorld
@@ -35,7 +35,7 @@ def solve_problem(solver):
     Solves the optimization problem using the provided solver.
 
     Parameters:
-    solver (Model): An instance of the CPLEX Model class used to define and solve the optimization problem.
+    solver (LpProblem): An instance of the PuLP LpProblem class used to define and solve the optimization problem.
 
     Returns:
     tuple: A tuple containing two numpy arrays:
@@ -45,29 +45,35 @@ def solve_problem(solver):
     Raises:
     SystemExit: If no optimal solution is found.
     """
-    # solver.print_information()
-    solution = solver.solve()
-    if solution.solve_status.value == 2:
-        print('Optimal solution found')
+    solver.solve(CPLEX_PY(msg=False, threads=14))
+    if solver.status == LpStatusOptimal:
         solved_xi = []
         solved_t = []
-        for v in solver.iter_variables():
+        solved_xi_names = []
+        solved_t_names = []
+        for v in solver.variables():
             if v.name.startswith('xi'):
-                solved_xi.append(v.solution_value)
+                solved_xi.append(v.varValue)
+                solved_xi_names.append(v.name)
             elif v.name.startswith('t'):
-                solved_t.append(v.solution_value)
+                solved_t.append(v.varValue)
+                solved_t_names.append(v.name)
+
+        # Sort t values by their original order
+        solved_t = [t for _, t in sorted(zip(solved_t_names, solved_t), key=lambda x: int(x[0].split('_')[1]))]
+        solved_xi = [t for _, t in sorted(zip(solved_xi_names, solved_xi), key=lambda x: int(x[0].split('_')[1]))]
         return np.array(solved_xi), np.array(solved_t)
     else:
         print('No optimal solution found')
+        print("STATUS:", LpStatus[solver.status])
         exit(1)
 
 
-def create_decision_variables(solver, prefix, n_vars, bounds=None, start_index=0):
+def create_decision_variables(prefix, n_vars, bounds=None, start_index=0):
     """
     Create an array of decision variables with consistent naming and bounds.
 
     Parameters:
-        solver (Model): An instance of the CPLEX Model class
         prefix: String prefix for variable names (e.g., 'xi', 't')
         n_vars: Number of variables to create
         bounds: Tuple of (lower_bound, upper_bound) or None for default bounds
@@ -76,15 +82,10 @@ def create_decision_variables(solver, prefix, n_vars, bounds=None, start_index=0
     Returns:
         array of decision variables, next available index
     """
-    if bounds is None:
-        bounds = (0, solver.infinity)  # Default bounds
 
     variables = np.array([
-        solver.continuous_var(
-            lb=bounds[0],
-            ub=bounds[1],
-            name=f'{prefix}_{i + start_index}'
-        ) for i in range(n_vars)
+        LpVariable(f'{prefix}_{i + start_index}', lowBound=bounds[0], upBound=bounds[1])
+        for i in range(n_vars)
     ])
 
     return variables, start_index + n_vars
@@ -112,7 +113,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
         alpha_set = alpha_set_all[s.y, s.x]
         transitions = world.transitions(s)
         ts = np.array([])
-        solver = Model(name='cvar_value')
+        solver = LpProblem(name='cvar_value', sense=LpMinimize)
         objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
 
         counter = 0
@@ -129,17 +130,14 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
 
                 # Create xi variables (non-negative)
                 xi, counter = create_decision_variables(
-                    solver=solver,
                     prefix='xi',
                     n_vars=n_trans,
-                    bounds=(0, solver.infinity),
+                    bounds=(0, None),
                     start_index=counter
                 )
-                solver.add_constraint(xi @ transitions_probabilities == 1)
+                solver += xi @ transitions_probabilities == 1
 
-                # Create t variables (unrestricted)
                 t, counter = create_decision_variables(
-                    solver=solver,
                     prefix='t',
                     n_vars=n_trans,
                     bounds=(-1e6, 1e6),
@@ -156,11 +154,10 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * transitions_probabilities
                     left_ineq = t - slope * xi * transitions_probabilities
                     for idx in range(len(right_ineq)):
-                        solver.add_constraint(left_ineq[idx] >= right_ineq[idx])
-                        solver.add_constraint(xi[idx] <= 1 / alpha)
+                        solver += left_ineq[idx] >= right_ineq[idx]
+                        solver += xi[idx] <= 1 / alpha
 
-
-        solver.minimize(sum(ts))
+        solver += sum(ts)
         _, t_values = solve_problem(solver)
         # xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
         t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
@@ -172,9 +169,9 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
         Q = np.min(rewards[:, np.newaxis, :] + discount * objective[:, :, np.newaxis], axis=-1)
         for alpha_idx2 in range(1, len(alpha_set)):
             Pol[alpha_idx2, s.y, s.x] = np.argmax(Q[:, alpha_idx2])
-            V_[alpha_idx2, s.y, s.x] = Q[Pol[alpha_idx2, s.y, s.x], alpha_idx2]
+            V[alpha_idx2, s.y, s.x] = Q[Pol[alpha_idx2, s.y, s.x], alpha_idx2]
 
-    return V_
+    return V
 
 
 def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
@@ -183,30 +180,26 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
         V = np.zeros((Ny, world.height, world.width))
     Y_set_all = np.ones((world.height, world.width, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny-1)))
     i = 0
-    figax = None
     while True:
-        V_ = value_update(world, V, i, Y_set_all, discount=0.95)
-        error = np.max(np.abs(V - V_))
+        V_prev = copy.deepcopy(V)
+        V_new = value_update(world, V, i, Y_set_all, discount=0.95)
+        error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
         # error, worst_state = value_difference(V, V_, world)
-        # if error < eps_convergence:
-        #     print("value fully learned after %d iterations" % (i,))
-        #     print('Error:', error)
-        #     break
-        # elif i > max_iters:
-        #     print("value finished without convergence after %d iterations" % (i,))
-        #     break
-        # V = V_
-        # i += 1
-        #
-        # print('Iteration:{}, error={} ({})'.format(i, error, worst_state))
+        if error < eps_convergence:
+            print("value fully learned after %d iterations" % (i,))
+            print('Error:', error)
+            break
+        elif i > max_iters:
+            print("value finished without convergence after %d iterations" % (i,))
+            break
+        V = V_new
+        i += 1
 
     return V
 
 
 if __name__ == '__main__':
-    import pickle
-    from cvar.gridworld.plots.grid import InteractivePlotMachine, PlotMachine
 
     PERFORM_VI = True
     # MAX_ITERS = 40

@@ -46,8 +46,8 @@ class GridWorld:
 
     def states(self):
         """ iterator over all possible states """
-        for y in range(self.height):
-            for x in range(self.width):
+        for x in range(self.width):
+            for y in range(self.height):
                 s = State(y, x)
                 if s in self.cliff_states:
                     continue
