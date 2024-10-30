@@ -8,6 +8,17 @@ from cvar.gridworld.cliffwalker import GridWorld
 
 
 def get_position_and_probabilities(action_transitions):
+    """
+    Extracts positions and probabilities from action transitions.
+
+    Parameters:
+    action_transitions (list): A list of transition objects, where each object has 'state' and 'prob' attributes.
+
+    Returns:
+    tuple: A tuple containing two numpy arrays:
+        - transitions_pos (np.array): Array of transition states.
+        - transitions_probabilities (np.array): Array of transition probabilities.
+    """
     transitions_pos = []
     transitions_probabilities = []
     for trans in action_transitions:
@@ -18,6 +29,20 @@ def get_position_and_probabilities(action_transitions):
 
 
 def solve_problem(solver):
+    """
+    Solves the optimization problem using the provided solver.
+
+    Parameters:
+    solver (Model): An instance of the CPLEX Model class used to define and solve the optimization problem.
+
+    Returns:
+    tuple: A tuple containing two numpy arrays:
+        - solved_xi (np.array): Array of solution values for variables starting with 'xi'.
+        - solved_t (np.array): Array of solution values for variables starting with 't'.
+
+    Raises:
+    SystemExit: If no optimal solution is found.
+    """
     solver.print_information()
     solution = solver.solve()
     if solution.solve_status.value == 2:
@@ -29,12 +54,53 @@ def solve_problem(solver):
                 solved_xi.append(v.solution_value)
             elif v.name.startswith('t'):
                 solved_t.append(v.solution_value)
+        return np.array(solved_xi), np.array(solved_t)
     else:
         print('No optimal solution found')
         exit(1)
 
 
+def create_decision_variables(solver, prefix, n_vars, bounds=None, start_index=0):
+    """
+    Create an array of decision variables with consistent naming and bounds.
+
+    Parameters:
+        solver (Model): An instance of the CPLEX Model class
+        prefix: String prefix for variable names (e.g., 'xi', 't')
+        n_vars: Number of variables to create
+        bounds: Tuple of (lower_bound, upper_bound) or None for default bounds
+        start_index: Starting index for variable naming
+
+    Returns:
+        np.array of decision variables, next available index
+    """
+    if bounds is None:
+        bounds = (0, solver.infinity)  # Default bounds
+
+    variables = np.array([
+        solver.continuous_var(
+            lb=bounds[0],
+            ub=bounds[1],
+            name=f'{prefix}_{i + start_index}'
+        ) for i in range(n_vars)
+    ])
+
+    return variables, start_index + n_vars
+
+
 def value_update(world, V, id=0, alpha_set_all=None):
+    """
+    Updates the value function for the given world.
+
+    Parameters:
+    world (GridWorld): The grid world environment.
+    V (np.array): The current value function.
+    id (int, optional): The iteration id for progress display. Defaults to 0.
+    alpha_set_all (np.array, optional): Array of alpha values for each state. Defaults to None.
+
+    Returns:
+    np.array: The updated value function.
+    """
     V_ = copy.deepcopy(V)
     for s in tqdm(world.states(), desc='Value Update %d' % id):
         alpha_set = alpha_set_all[s.y, s.x]
@@ -45,6 +111,7 @@ def value_update(world, V, id=0, alpha_set_all=None):
             counter = 0
             objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
 
+            ts = np.array([])
             for a in world.ACTIONS:
                 transitions_pos, transitions_probabilities = get_position_and_probabilities(transitions[a])
                 n_trans = len(transitions_pos)
@@ -62,11 +129,23 @@ def value_update(world, V, id=0, alpha_set_all=None):
                     v_i_next = V_[i + 1, transitions_pos[:, 0], transitions_pos[:, 1]]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
+                    # Create xi variables (non-negative)
+                    xi, counter = create_decision_variables(
+                        solver=solver,
+                        prefix='xi',
+                        n_vars=n_trans,
+                        bounds=(0, solver.infinity),
+                        start_index=counter
+                    )
 
-                    xi = np.array([solver.continuous_var(0, solver.infinity, f'xi_{counter + tnum}') for tnum in range(n_trans)])
-                    counter += n_trans
-                    t = np.array([solver.continuous_var(-1e6, 1e6, f't_{counter + tnum}') for tnum in range(n_trans)])
-                    counter += n_trans
+                    # Create t variables (unrestricted)
+                    t, counter = create_decision_variables(
+                        solver=solver,
+                        prefix='t',
+                        n_vars=n_trans,
+                        bounds=(-1e6, 1e6),
+                        start_index=counter
+                    )
 
                     right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * transitions_probabilities
                     left_ineq = t - slope * xi * transitions_probabilities
@@ -75,8 +154,11 @@ def value_update(world, V, id=0, alpha_set_all=None):
                         solver.add_constraint(xi[idx] <= 1 / alpha)
 
                     solver.add_constraint(xi @ transitions_probabilities == 1)
-                    solver.maximize(sum(t))
-                    solve_problem(solver)
+                    ts = np.append(ts, t)
+            if alpha == 0:
+                continue
+            solver.minimize(sum(ts))
+            solve_problem(solver)
 
     return V_
 
