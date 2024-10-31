@@ -1,4 +1,5 @@
 import copy
+import pickle
 
 import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, PULP_CBC_CMD, CPLEX_PY
@@ -45,7 +46,7 @@ def solve_problem(solver):
     Raises:
     SystemExit: If no optimal solution is found.
     """
-    solver.solve(CPLEX_PY(msg=False, threads=14))
+    solver.solve(CPLEX_PY(msg=False))
     if solver.status == LpStatusOptimal:
         solved_xi = []
         solved_t = []
@@ -91,6 +92,16 @@ def create_decision_variables(prefix, n_vars, bounds=None, start_index=0):
     return variables, start_index + n_vars
 
 
+def get_deterministic_reward(transitions):
+    rewards = []
+    for action_transitions in transitions:
+        _, transitions_probabilities, transitions_rewards = get_transition_information(action_transitions)
+        idx_max_prob = np.where(transitions_probabilities == np.max(transitions_probabilities))[0][0]
+        rewards.append(transitions_rewards[idx_max_prob])
+
+    return np.array(rewards)
+
+
 def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
     """
     Updates the value function for the given world.
@@ -107,6 +118,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
     """
     Pol = np.zeros_like(V, dtype=int)
     V_ = copy.deepcopy(V)
+    # np.save('vi_{}.npy'.format(id), V_)
 
     states = list(world.states())
     for s in tqdm(states, desc='Value Update %d' % id):
@@ -119,13 +131,13 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
         counter = 0
         for alpha_idx, alpha in enumerate(alpha_set):
             for a in world.ACTIONS:
-                transitions_pos, transitions_probabilities, _ = get_transition_information(transitions[a])
+                transitions_pos, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
                 n_trans = len(transitions_pos)
 
                 if alpha == 0:
                     # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
                     transitions_pos = np.array(transitions_pos)
-                    objective[a, alpha_idx] = min(V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]])
+                    objective[a, alpha_idx] = min(transitions_rewards + discount * V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]])
                     continue
 
                 # Create xi variables (non-negative)
@@ -143,7 +155,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     bounds=(-1e6, 1e6),
                     start_index=counter
                 )
-                ts = np.append(ts, t)
+                ts = np.append(ts, transitions_probabilities*transitions_rewards+t)
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
@@ -151,8 +163,8 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     v_i_next = V_[i + 1, transitions_pos[:, 0], transitions_pos[:, 1]]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
-                    right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * transitions_probabilities
-                    left_ineq = t - slope * xi * transitions_probabilities
+                    right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * discount * transitions_probabilities
+                    left_ineq = t - slope * xi * discount * transitions_probabilities
                     for idx in range(len(right_ineq)):
                         solver += left_ineq[idx] >= right_ineq[idx]
                         solver += xi[idx] <= 1 / alpha
@@ -164,10 +176,11 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
         t_values = t_values.sum(axis=-1)
         objective[:, 1:] = t_values
 
-        rewards = np.array([get_transition_information(transitions[a])[2] for a in world.ACTIONS])
+        # rewards_1 = np.array([get_transition_information(transitions[a])[2] for a in world.ACTIONS])
+        # Q_1 = np.min(rewards_1[:, np.newaxis, :] + discount * objective[:, :, np.newaxis], axis=-1)
 
-        Q = np.min(rewards[:, np.newaxis, :] + discount * objective[:, :, np.newaxis], axis=-1)
-        for alpha_idx2 in range(1, len(alpha_set)):
+        Q = objective
+        for alpha_idx2 in range(len(alpha_set)):
             Pol[alpha_idx2, s.y, s.x] = np.argmax(Q[:, alpha_idx2])
             V[alpha_idx2, s.y, s.x] = Q[Pol[alpha_idx2, s.y, s.x], alpha_idx2]
 
@@ -203,7 +216,7 @@ if __name__ == '__main__':
 
     PERFORM_VI = True
     # MAX_ITERS = 40
-    MAX_ITERS = 100
+    MAX_ITERS = 1000
     TOLL = 1e-3
 
     np.random.seed(2)
@@ -211,7 +224,7 @@ if __name__ == '__main__':
         world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
         # # world = AutonomousCarNavigation()
         V = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        # pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
+        pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
 
     # # ============================= load
     # world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))
