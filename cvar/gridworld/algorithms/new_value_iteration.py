@@ -184,7 +184,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
             Pol[alpha_idx2, s.y, s.x] = np.argmax(Q[:, alpha_idx2])
             V[alpha_idx2, s.y, s.x] = Q[Pol[alpha_idx2, s.y, s.x], alpha_idx2]
 
-    return V
+    return V, Pol
 
 
 def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
@@ -195,10 +195,10 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
     i = 0
     while True:
         V_prev = copy.deepcopy(V)
-        V_new = value_update(world, V, i, Y_set_all, discount=0.95)
+        V_new, Pol = value_update(world, V, i, Y_set_all, discount=0.95)
         error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
-        # error, worst_state = value_difference(V, V_, world)
+        V = V_new
         if error < eps_convergence:
             print("value fully learned after %d iterations" % (i,))
             print('Error:', error)
@@ -206,10 +206,9 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
         elif i > max_iters:
             print("value finished without convergence after %d iterations" % (i,))
             break
-        V = V_new
         i += 1
 
-    return V
+    return V, Pol
 
 
 if __name__ == '__main__':
@@ -223,8 +222,8 @@ if __name__ == '__main__':
     if PERFORM_VI:
         world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
         # # world = AutonomousCarNavigation()
-        V = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        pickle.dump((world, V), open('data/models/vi_test.pkl', mode='wb'))
+        V, Policy = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        pickle.dump((world, V, Policy), open('data/models/vi_test.pkl', mode='wb'))
 
     # # ============================= load
     # world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))
