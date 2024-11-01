@@ -129,17 +129,13 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
         objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
 
         counter = 0
-        for alpha_idx, alpha in enumerate(alpha_set):
-            for a in world.ACTIONS:
-                transitions_pos, transitions_probabilities, transitions_rewards = get_transition_information(
-                    transitions[a])
-                n_trans = len(transitions_pos)
-
+        for a in world.ACTIONS:
+            transitions_pos, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
+            n_trans = len(transitions_pos)
+            for alpha_idx, alpha in enumerate(alpha_set):
                 if alpha == 0:
                     # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
-                    transitions_pos = np.array(transitions_pos)
-                    objective[a, alpha_idx] = min(
-                        transitions_rewards + discount * V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]])
+                    objective[a, alpha_idx] = min((transitions_rewards + discount * V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]]) * transitions_probabilities)
                     continue
 
                 # Create xi variables (non-negative)
@@ -157,7 +153,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     bounds=(-1e6, 1e6),
                     start_index=counter
                 )
-                ts = np.append(ts, t)
+                ts = np.append(ts, transitions_probabilities*transitions_rewards+t)
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
@@ -166,7 +162,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
                     right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * discount * transitions_probabilities
-                    left_ineq = t - slope * xi * discount * transitions_probabilities + transitions_rewards * transitions_probabilities
+                    left_ineq = t - slope * xi * discount * transitions_probabilities
                     for idx in range(len(right_ineq)):
                         solver += left_ineq[idx] >= right_ineq[idx]
                         solver += xi[idx] <= 1 / alpha
@@ -174,8 +170,10 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
         solver += sum(ts)
         _, t_values = solve_problem(solver)
         # xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
-
-        t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
+        t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
+        for a in world.ACTIONS:
+            _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
+            t_values[a] = transitions_rewards * transitions_probabilities + t_values[a]
         t_values = t_values.sum(axis=-1)
         objective[:, 1:] = t_values
 
@@ -194,7 +192,7 @@ def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
     Ny = 21
     if V is None:
         V = np.zeros((Ny, world.height, world.width))
-    Y_set_all = np.ones((world.height, world.width, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
+    Y_set_all = np.ones((world.height, world.width, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny-1)))
     i = 0
     while True:
         V_prev = copy.deepcopy(V)
