@@ -153,7 +153,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     bounds=(-1e6, 1e6),
                     start_index=counter
                 )
-                ts = np.append(ts, transitions_probabilities*transitions_rewards+t)
+                ts = np.append(ts, xi*transitions_probabilities*transitions_rewards+t)
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
@@ -168,12 +168,12 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                         solver += xi[idx] <= 1 / alpha
 
         solver += sum(ts)
-        _, t_values = solve_problem(solver)
-        # xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
+        xi_values, t_values = solve_problem(solver)
+        xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
         t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
         for a in world.ACTIONS:
             _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
-            t_values[a] = transitions_rewards * transitions_probabilities + t_values[a]
+            t_values[a] = xi_values[a] * transitions_rewards * transitions_probabilities + t_values[a]
         t_values = t_values.sum(axis=-1)
         objective[:, 1:] = t_values
 
@@ -224,7 +224,7 @@ if __name__ == '__main__':
         world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
         # # world = AutonomousCarNavigation()
         V, Policy = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        pickle.dump((world, V, Policy), open('data/models/vi_test.pkl', mode='wb'))
+        pickle.dump((world, V, Policy), open('../../../vi_test.pkl', mode='wb'))
 
     # # ============================= load
     # world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))

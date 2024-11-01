@@ -91,7 +91,7 @@ class GridWorld:
                 s_ = self.target_state(s, a_)
                 if s_ in self.cliff_states:
                     r = self.FALL_REWARD
-                    s_ = self.absorbing_state
+                    # s_ = self.absorbing_state
                     # s_ = self.initial_state
                     # s_ = next(iter(self.goal_states))
                 else:
@@ -116,18 +116,18 @@ class GridWorld:
         return transition
 
 
-
-if __name__ == '__main__':
-    from cvar.gridworld.core.constants import *
-    from cvar.gridworld.plots.grid import grid_plot
-    import matplotlib.pyplot as plt
-
-    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-    grid_plot(world)
-    plt.show()
-    # for i in range(20):
-    #     print('seed=', i)
-    #     np.random.seed(i)
-    #     world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-    #     grid_plot(world)
-    #     plt.show()
+#
+# if __name__ == '__main__':
+#     from cvar.gridworld.core.constants import *
+#     from cvar.gridworld.plots.grid import grid_plot
+#     import matplotlib.pyplot as plt
+#
+#     world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+#     grid_plot(world)
+#     plt.show()
+#     # for i in range(20):
+#     #     print('seed=', i)
+#     #     np.random.seed(i)
+#     #     world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+#     #     grid_plot(world)
+#     #     plt.show()
