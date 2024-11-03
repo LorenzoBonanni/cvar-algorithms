@@ -161,7 +161,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     v_i_next = V_[i + 1, transitions_pos[:, 0], transitions_pos[:, 1]]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
-                    right_ineq = alpha_i * v_i / alpha - slope * alpha_i / alpha * discount * transitions_probabilities
+                    right_ineq = (alpha_i * v_i / alpha - slope * alpha_i / alpha) * discount * transitions_probabilities
                     left_ineq = t - slope * xi * discount * transitions_probabilities
                     for idx in range(len(right_ineq)):
                         solver += left_ineq[idx] >= right_ineq[idx]
