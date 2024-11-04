@@ -24,40 +24,62 @@ class SimpleEnv:
     ACTION_NAMES = {STAY: "Stay", SWITCH: "Switch"}
 
     def __init__(self):
+        # # Transition probabilities: P[s, a, s']
+        # self.P = np.array([
+        #     # State 0 (Start)
+        #     [[0.8, 0.2, 0.0],  # Action 0: likely stay in start
+        #      [0.3, 0.7, 0.0]],  # Action 1: likely go to risky
+        #
+        #     # State 1 (Risky)
+        #     [[0.0, 0.5, 0.5],  # Action 0: might end
+        #      [0.0, 0.2, 0.8]],  # Action 1: likely end
+        #
+        #     # State 2 (Terminal)
+        #     [[1.0, 0.0, 0.0],  # Action 0: stay terminal (dummy)
+        #      [1.0, 0.0, 0.0]]  # Action 1: stay terminal (dummy)
+        # ])
+        #
+        # # Rewards: R[s, a, s']
+        # self.R = np.array([
+        #     # State 0 (Start)
+        #     [[1.0, 0.0, 0.0],  # Action 0: safe, steady reward
+        #      [0.0, 2.0, 0.0]],  # Action 1: potential higher reward
+        #
+        #     # State 1 (Risky)
+        #     [[0.0, 1.0, -2.0],  # Action 0: moderate risk
+        #      [0.0, 3.0, -4.0]],  # Action 1: high risk, high reward
+        #
+        #     # State 2 (Terminal)
+        #     [[0.0, 0.0, 0.0],  # Action 0: no more rewards
+        #      [0.0, 0.0, 0.0]]  # Action 1: no more rewards
+        # ])
         # Transition probabilities: P[s, a, s']
         self.P = np.array([
             # State 0 (Start)
-            [[0.8, 0.2, 0.0],  # Action 0: likely stay in start
-             [0.3, 0.7, 0.0]],  # Action 1: likely go to risky
+            [[0.7, 0.3],  # Action 0: less likely to terminate
+             [0.3, 0.7]],  # Action 1: more likely to terminate
 
-            # State 1 (Risky)
-            [[0.0, 0.5, 0.5],  # Action 0: might end
-             [0.0, 0.2, 0.8]],  # Action 1: likely end
-
-            # State 2 (Terminal)
-            [[1.0, 0.0, 0.0],  # Action 0: stay terminal (dummy)
-             [1.0, 0.0, 0.0]]  # Action 1: stay terminal (dummy)
+            # State 1 (Terminal)
+            [[1.0, 0.0],  # Action 0: stay terminal (dummy)
+             [1.0, 0.0]]  # Action 1: stay terminal (dummy)
         ])
 
         # Rewards: R[s, a, s']
         self.R = np.array([
             # State 0 (Start)
-            [[1.0, 0.0, 0.0],  # Action 0: safe, steady reward
-             [0.0, 2.0, 0.0]],  # Action 1: potential higher reward
+            [[1.0, -2.0],   # Action 0: safe action with small loss risk
+             [20.0, -4.0]],  # Action 1: risky action with bigger loss risk
 
-            # State 1 (Risky)
-            [[0.0, 1.0, -2.0],  # Action 0: moderate risk
-             [0.0, 3.0, -4.0]],  # Action 1: high risk, high reward
-
-            # State 2 (Terminal)
-            [[0.0, 0.0, 0.0],  # Action 0: no more rewards
-             [0.0, 0.0, 0.0]]  # Action 1: no more rewards
+            # State 1 (Terminal)
+            [[0.0, 0.0],  # Action 0: no more rewards
+             [0.0, 0.0]]  # Action 1: no more rewards
         ])
-        self.Ns = 3
+
+        self.Ns = len(self.P)
 
     def states(self):
         """ iterator over all possible states """
-        for s in range(2):
+        for s in range(self.Ns-1):
             yield State(s)
 
     def transitions(self, s):
@@ -65,11 +87,11 @@ class SimpleEnv:
         returns a list of Transitions from the state s for each action, only non zero probabilities are given
         serves the lists for all actions at once
         """
-        states = [State(0), State(1), State(2)]
+        states = [State(s_) for s_ in range(self.Ns)]
         all_transitions = []
         for a in self.ACTIONS:
             action_transitions = []
-            for s_ in range(3):
+            for s_ in range(self.Ns):
                 if self.P[s.id, a, s_] > 0:
                     action_transitions.append(Transition(state=states[s_], prob=float(self.P[s.id, a, s_]), reward=float(self.R[s.id, a, s_])))
             all_transitions.append(action_transitions)

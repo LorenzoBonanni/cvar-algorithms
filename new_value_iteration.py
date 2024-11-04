@@ -5,8 +5,8 @@ import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, PULP_CBC_CMD, CPLEX_PY
 from tqdm import tqdm
 
-from cvar.gridworld.cliffwalker import GridWorld
-from cvar.gridworld.simple_env import SimpleEnv
+from cliffwalker import GridWorld
+from simple_env import SimpleEnv
 
 
 def get_transition_information(action_transitions):
@@ -103,7 +103,7 @@ def get_deterministic_reward(transitions):
     return np.array(rewards)
 
 
-def cvar_value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
+def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
     """
     Updates the value function for the given world.
 
@@ -117,7 +117,6 @@ def cvar_value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
     Returns:
     np.array: The updated value function.
     """
-    Pol = np.zeros_like(V, dtype=int)
     V_ = copy.deepcopy(V)
     # np.save('vi_{}.npy'.format(id), V_)
 
@@ -154,7 +153,7 @@ def cvar_value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                     bounds=(-1e6, 1e6),
                     start_index=counter
                 )
-                ts = np.append(ts, xi*transitions_probabilities*transitions_rewards+t)
+                ts = np.append(ts, xi * transitions_probabilities * transitions_rewards + t)
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
@@ -170,8 +169,8 @@ def cvar_value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
 
         solver += sum(ts)
         xi_values, t_values = solve_problem(solver)
-        xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
-        t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set)-1, -1))
+        xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
+        t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
         for a in world.ACTIONS:
             _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
             t_values[a] = xi_values[a] * transitions_rewards * transitions_probabilities + t_values[a]
@@ -189,14 +188,15 @@ def cvar_value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
     return V, Pol
 
 
-def cvar_value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
-    Ny = 21
+def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
+    Ny = 51
     V = np.zeros((Ny, world.Ns))
-    Y_set_all = np.ones((world.Ns, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny-1)))
+    Pol = np.zeros_like(V, dtype=int)
+    Y_set_all = np.ones((world.Ns, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
     i = 0
     while True:
         V_prev = copy.deepcopy(V)
-        V_new, Pol = cvar_value_update(world, V, i, Y_set_all, discount=0.95)
+        V_new, Pol = cvar_value_update(world, V, Pol, i, Y_set_all, discount=0.95)
         error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
         V = V_new
@@ -212,8 +212,7 @@ def cvar_value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
     return V, Pol
 
 
-if __name__ == '__main__':
-
+def main():
     PERFORM_VI = True
     # MAX_ITERS = 40
     MAX_ITERS = 1000
@@ -221,11 +220,17 @@ if __name__ == '__main__':
 
     np.random.seed(2)
     if PERFORM_VI:
-        # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        world = SimpleEnv()
+        world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+        # world = SimpleEnv()
         V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('../../../vi_test.pkl', mode='wb'))
-        pickle.dump((V, Policy), open('../../../vi_test.pkl', mode='wb'))
+        # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('vi_test.pkl', mode='wb'))
+        print(V)
+        print(Policy)
+        pickle.dump((V, Policy), open('cvar_vi.pkl', mode='wb'))
+
+
+if __name__ == '__main__':
+    main()
 
     # # ============================= load
     # world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))
