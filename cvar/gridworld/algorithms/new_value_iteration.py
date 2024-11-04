@@ -6,6 +6,7 @@ from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, P
 from tqdm import tqdm
 
 from cvar.gridworld.cliffwalker import GridWorld
+from cvar.gridworld.simple_env import SimpleEnv
 
 
 def get_transition_information(action_transitions):
@@ -20,15 +21,15 @@ def get_transition_information(action_transitions):
         - transitions_pos (np.array): Array of transition states.
         - transitions_probabilities (np.array): Array of transition probabilities.
     """
-    transitions_pos = []
+    transitions_ids = []
     transitions_probabilities = []
     transitions_rewards = []
     for trans in action_transitions:
-        transitions_pos.append(trans.state)
+        transitions_ids.append(trans.state.id)
         transitions_probabilities.append(trans.prob)
         transitions_rewards.append(trans.reward)
 
-    return np.array(transitions_pos), np.array(transitions_probabilities), np.array(transitions_rewards)
+    return np.array(transitions_ids), np.array(transitions_probabilities), np.array(transitions_rewards)
 
 
 def solve_problem(solver):
@@ -102,7 +103,7 @@ def get_deterministic_reward(transitions):
     return np.array(rewards)
 
 
-def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
+def cvar_value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
     """
     Updates the value function for the given world.
 
@@ -122,7 +123,7 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
 
     states = list(world.states())
     for s in tqdm(states, desc='Value Update %d' % id):
-        alpha_set = alpha_set_all[s.y, s.x]
+        alpha_set = alpha_set_all[s.id]
         transitions = world.transitions(s)
         ts = np.array([])
         solver = LpProblem(name='cvar_value', sense=LpMinimize)
@@ -130,12 +131,12 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
 
         counter = 0
         for a in world.ACTIONS:
-            transitions_pos, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
-            n_trans = len(transitions_pos)
+            transitions_ids, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
+            n_trans = len(transitions_ids)
             for alpha_idx, alpha in enumerate(alpha_set):
                 if alpha == 0:
                     # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
-                    objective[a, alpha_idx] = min((transitions_rewards + discount * V_[alpha_idx, transitions_pos[:, 0], transitions_pos[:, 1]]) * transitions_probabilities)
+                    objective[a, alpha_idx] = min((transitions_rewards + discount * V_[alpha_idx, transitions_ids]) * transitions_probabilities)
                     continue
 
                 # Create xi variables (non-negative)
@@ -157,8 +158,8 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
-                    v_i = V_[i, transitions_pos[:, 0], transitions_pos[:, 1]]
-                    v_i_next = V_[i + 1, transitions_pos[:, 0], transitions_pos[:, 1]]
+                    v_i = V_[i, transitions_ids]
+                    v_i_next = V_[i + 1, transitions_ids]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
                     right_ineq = (alpha_i * v_i / alpha - slope * alpha_i / alpha) * discount * transitions_probabilities
@@ -182,21 +183,20 @@ def value_update(world, V, id=0, alpha_set_all=None, discount=0.95):
 
         Q = objective
         for alpha_idx2 in range(len(alpha_set)):
-            Pol[alpha_idx2, s.y, s.x] = np.argmax(Q[:, alpha_idx2])
-            V[alpha_idx2, s.y, s.x] = Q[Pol[alpha_idx2, s.y, s.x], alpha_idx2]
+            Pol[alpha_idx2, s.id] = np.argmax(Q[:, alpha_idx2])
+            V[alpha_idx2, s.id] = Q[Pol[alpha_idx2, s.id], alpha_idx2]
 
     return V, Pol
 
 
-def value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
+def cvar_value_iteration(world, V=None, max_iters=1e3, eps_convergence=1e-3):
     Ny = 21
-    if V is None:
-        V = np.zeros((Ny, world.height, world.width))
-    Y_set_all = np.ones((world.height, world.width, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny-1)))
+    V = np.zeros((Ny, world.Ns))
+    Y_set_all = np.ones((world.Ns, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny-1)))
     i = 0
     while True:
         V_prev = copy.deepcopy(V)
-        V_new, Pol = value_update(world, V, i, Y_set_all, discount=0.95)
+        V_new, Pol = cvar_value_update(world, V, i, Y_set_all, discount=0.95)
         error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
         V = V_new
@@ -221,10 +221,11 @@ if __name__ == '__main__':
 
     np.random.seed(2)
     if PERFORM_VI:
-        world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        # # world = AutonomousCarNavigation()
-        V, Policy = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        pickle.dump((world, V, Policy), open('../../../vi_test.pkl', mode='wb'))
+        # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+        world = SimpleEnv()
+        V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('../../../vi_test.pkl', mode='wb'))
+        pickle.dump((V, Policy), open('../../../vi_test.pkl', mode='wb'))
 
     # # ============================= load
     # world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))

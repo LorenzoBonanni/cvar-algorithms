@@ -5,7 +5,24 @@ import numpy as np
 
 # helper data structures:
 # a state is given by row and column positions designated (y, x)
-State = namedtuple('State', ['y', 'x'])
+# State = namedtuple('State', ['y', 'x'])
+
+class State:
+    def __init__(self, y, x, NROW=14, NCOL=16):
+        self.y = y
+        self.x = x
+        self.NROW = NROW
+        self.NCOL = NCOL
+        self.id = int(np.ravel_multi_index((y, x), (self.NROW, self.NCOL)))
+
+    def __eq__(self, other):
+        return self.y == other.y and self.x == other.x
+
+    def __hash__(self):
+        return self.id
+
+    def __repr__(self):
+        return f"({self.y}, {self.x})"
 
 # encapsulates a transition to state and its probability
 Transition = namedtuple('Transition', ['state', 'prob', 'reward'])  # transition to state with probability prob
@@ -37,18 +54,19 @@ class GridWorld:
 
         goal_pos = goal_pos
         start_pos = start_pos
-        self.initial_state = State(start_pos[0], start_pos[1])
-        self.absorbing_state = State(-1, -1)
-        self.goal_states = {State(goal_pos[0], goal_pos[1])}
+        self.initial_state = State(start_pos[0], start_pos[1], self.height, self.width)
+        # self.absorbing_state = State(-1, -1)
+        self.goal_states = {State(goal_pos[0], goal_pos[1], self.height, self.width)}
 
         self.cliff_states = set(State(cs[0], cs[1]) for cs in zip(*cliff))
-        self.terminal_states = self.goal_states | self.cliff_states | {self.absorbing_state}
+        self.terminal_states = self.goal_states | self.cliff_states
+        self.Ns = self.height * self.width
 
     def states(self):
         """ iterator over all possible states """
         for x in range(self.width):
             for y in range(self.height):
-                s = State(y, x)
+                s = State(y, x, self.height, self.width)
                 if s in self.cliff_states:
                     continue
                 yield s
@@ -57,13 +75,13 @@ class GridWorld:
         """ Return the next deterministic state """
         x, y = s.x, s.y
         if a == self.ACTION_LEFT:
-            return State(y, max(x - 1, 0))
+            return State(y, max(x - 1, 0), self.height, self.width)
         if a == self.ACTION_RIGHT:
-            return State(y, min(x + 1, self.width - 1))
+            return State(y, min(x + 1, self.width - 1), self.height, self.width)
         if a == self.ACTION_UP:
-            return State(max(y - 1, 0), x)
+            return State(max(y - 1, 0), x, self.height, self.width)
         if a == self.ACTION_DOWN:
-            return State(min(y + 1, self.height - 1), x)
+            return State(min(y + 1, self.height - 1), x, self.height, self.width)
 
     def transitions(self, s):
         """
@@ -72,10 +90,6 @@ class GridWorld:
         """
         if s in self.goal_states:
             return [[Transition(state=s, prob=1.0, reward=0)] for a in self.ACTIONS]
-
-        if s == self.absorbing_state:
-            print("aaaa")
-            return [[Transition(state=s, prob=1.0, reward=self.FALL_REWARD)] for a in self.ACTIONS]
 
         # if s in self.risky_goal_states:
         #     goal = next(iter(self.goal_states))
@@ -91,9 +105,6 @@ class GridWorld:
                 s_ = self.target_state(s, a_)
                 if s_ in self.cliff_states:
                     r = self.FALL_REWARD
-                    # s_ = self.absorbing_state
-                    # s_ = self.initial_state
-                    # s_ = next(iter(self.goal_states))
                 else:
                     r = -1
                 initial_trans = curr_states_trans.get((s_.y, s_.x), None)

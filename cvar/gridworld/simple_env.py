@@ -4,9 +4,18 @@ import numpy as np
 
 Transition = namedtuple('Transition', ['state', 'prob', 'reward'])  # transition to state with probability prob
 
+class State:
+    def __init__(self, id):
+        self.id = id
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __hash__(self):
+        return self.id
 
 class SimpleEnv:
-    """ Cliffwalker. """
+    """ Simple environment with three states and two actions. """
 
     STAY = 0
     SWITCH = 1
@@ -44,22 +53,29 @@ class SimpleEnv:
             [[0.0, 0.0, 0.0],  # Action 0: no more rewards
              [0.0, 0.0, 0.0]]  # Action 1: no more rewards
         ])
+        self.Ns = 3
 
     def states(self):
         """ iterator over all possible states """
         for s in range(2):
-            yield s
+            yield State(s)
 
     def transitions(self, s):
         """
         returns a list of Transitions from the state s for each action, only non zero probabilities are given
         serves the lists for all actions at once
         """
+        states = [State(0), State(1), State(2)]
+        all_transitions = []
+        for a in self.ACTIONS:
+            action_transitions = []
+            for s_ in range(3):
+                if self.P[s.id, a, s_] > 0:
+                    action_transitions.append(Transition(state=states[s_], prob=float(self.P[s.id, a, s_]), reward=float(self.R[s.id, a, s_])))
+            all_transitions.append(action_transitions)
 
-        states = [0, 1, 2]
-        states = [0, 1, 2]
-
-        return [[Transition(state=states[s_], prob=float(self.P[s, a, s_]), reward=float(self.R[s, a, s_])) for s_ in range(3) if self.P[s, a, s_] > 0] for a in self.ACTIONS]
+        return all_transitions
+        # return [[Transition(state=states[s_], prob=float(self.P[s, a, s_]), reward=float(self.R[s, a, s_])) for s_ in range(3) if self.P[s, a, s_] > 0] for a in self.ACTIONS]
 
 if __name__ == '__main__':
     world = SimpleEnv()
