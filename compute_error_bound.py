@@ -2,7 +2,7 @@ import numpy as np
 
 gamma = 0.95
 epsilon = 1e-3
-Ny = 21
+Ny = 51
 
 def get_theta():
     # Generate the discretization
@@ -12,5 +12,5 @@ def get_theta():
     return theta
 
 theta = get_theta()
-error_bound = gamma / (1 - gamma) * ((theta - 1) + epsilon)
+error_bound = (gamma / (1 - gamma)) * ((theta - 1) + epsilon)
 print(f"Error bound: {error_bound}")

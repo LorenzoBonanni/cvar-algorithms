@@ -2,12 +2,13 @@ import copy
 import pickle
 
 import numpy as np
-from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, CPLEX_PY
+from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, PULP_CBC_CMD, CPLEX_PY
 from tqdm import tqdm
 
+from cliffwalker import GridWorld
 from simple_env import SimpleEnv
 
-# IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a,s')
+# IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a)
 
 def get_transition_information(action_transitions):
     """
@@ -136,7 +137,7 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
             for alpha_idx, alpha in enumerate(alpha_set):
                 if alpha == 0:
                     # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
-                    objective[a, alpha_idx] = min((transitions_rewards + discount * V_[alpha_idx, transitions_ids]) * transitions_probabilities)
+                    objective[a, alpha_idx] = min(V_[alpha_idx, transitions_ids])
                     continue
 
                 # Create xi variables (non-negative)
@@ -154,7 +155,7 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
                     bounds=(-1e6, 1e6),
                     start_index=counter
                 )
-                ts = np.append(ts, xi * transitions_probabilities * transitions_rewards + t)
+                ts = np.append(ts, t)
                 for i in range(len(alpha_set) - 1):
                     alpha_i = alpha_set[i]
                     alpha_i_next = alpha_set[i + 1]
@@ -162,8 +163,8 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
                     v_i_next = V_[i + 1, transitions_ids]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
-                    right_ineq = (alpha_i * v_i / alpha - slope * alpha_i / alpha) * discount * transitions_probabilities
-                    left_ineq = t - slope * xi * discount * transitions_probabilities
+                    right_ineq = (alpha_i * v_i / alpha - slope * alpha_i / alpha) * transitions_probabilities
+                    left_ineq = t - slope * xi * transitions_probabilities
                     for idx in range(len(right_ineq)):
                         solver += left_ineq[idx] >= right_ineq[idx]
                         solver += xi[idx] <= 1 / alpha
@@ -172,10 +173,12 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
         xi_values, t_values = solve_problem(solver)
         xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
         t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
+        r = []
         for a in world.ACTIONS:
             _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
-            t_values[a] = xi_values[a] * transitions_rewards * transitions_probabilities + t_values[a]
-        t_values = t_values.sum(axis=-1)
+            r.append(transitions_rewards[0])
+            t_values[a] = t_values[a]
+        t_values = np.array(r) + discount * t_values.sum(axis=-1)
         objective[:, 1:] = t_values
 
         # rewards_1 = np.array([get_transition_information(transitions[a])[2] for a in world.ACTIONS])

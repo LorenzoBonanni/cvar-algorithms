@@ -8,7 +8,7 @@ def main():
     plt.hist(s, 100, density=True, align='mid')
 
     plt.axis('tight')
-    alpha = 0.01
+    alpha = 0.001
     average = np.mean(s)
     cvar = np.mean(s[s < np.quantile(s, alpha)])
     var = np.quantile(s, alpha)

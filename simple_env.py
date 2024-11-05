@@ -22,64 +22,125 @@ class SimpleEnv:
     ACTIONS = [STAY, SWITCH]
     FALL_REWARD = -2
     ACTION_NAMES = {STAY: "Stay", SWITCH: "Switch"}
+    Rewards_s_a_s1 = False
 
     def __init__(self):
-        # # Transition probabilities: P[s, a, s']
-        # self.P = np.array([
-        #     # State 0 (Start)
-        #     [[0.8, 0.2, 0.0],  # Action 0: likely stay in start
-        #      [0.3, 0.7, 0.0]],  # Action 1: likely go to risky
-        #
-        #     # State 1 (Risky)
-        #     [[0.0, 0.5, 0.5],  # Action 0: might end
-        #      [0.0, 0.2, 0.8]],  # Action 1: likely end
-        #
-        #     # State 2 (Terminal)
-        #     [[1.0, 0.0, 0.0],  # Action 0: stay terminal (dummy)
-        #      [1.0, 0.0, 0.0]]  # Action 1: stay terminal (dummy)
-        # ])
-        #
-        # # Rewards: R[s, a, s']
-        # self.R = np.array([
-        #     # State 0 (Start)
-        #     [[1.0, 0.0, 0.0],  # Action 0: safe, steady reward
-        #      [0.0, 2.0, 0.0]],  # Action 1: potential higher reward
-        #
-        #     # State 1 (Risky)
-        #     [[0.0, 1.0, -2.0],  # Action 0: moderate risk
-        #      [0.0, 3.0, -4.0]],  # Action 1: high risk, high reward
-        #
-        #     # State 2 (Terminal)
-        #     [[0.0, 0.0, 0.0],  # Action 0: no more rewards
-        #      [0.0, 0.0, 0.0]]  # Action 1: no more rewards
-        # ])
-        # Transition probabilities: P[s, a, s']
-        self.P = np.array([
-            # State 0 (Start)
-            [[0.7, 0.3],  # Action 0: less likely to terminate
-             [0.3, 0.7]],  # Action 1: more likely to terminate
+        if self.Rewards_s_a_s1:
+            self.P = np.array([
+                # State 0 (Start)
+                [[0.0, 0.3, 0.7],  # Action 0: less likely to terminate
+                 [0.0, 0.7, 0.3]],  # Action 1: more likely to terminate
 
-            # State 1 (Terminal)
-            [[1.0, 0.0],  # Action 0: stay terminal (dummy)
-             [1.0, 0.0]]  # Action 1: stay terminal (dummy)
-        ])
+                # State 1 (Terminal)
+                [[0.0, 1.0, 0.0],  # Action 0: stay terminal (dummy)
+                 [0.0, 1.0, 0.0]],  # Action 1: stay terminal (dummy)
 
-        # Rewards: R[s, a, s']
-        self.R = np.array([
-            # State 0 (Start)
-            [[1.0, -2.0],   # Action 0: safe action with small loss risk
-             [20.0, -4.0]],  # Action 1: risky action with bigger loss risk
+                # State 2 (Terminal)
+                [[0.0, 0.0, 1.0],  # Action 0: stay terminal (dummy)
+                 [0.0, 0.0, 1.0]]  # Action 1: stay terminal (dummy)
+            ])
 
-            # State 1 (Terminal)
-            [[0.0, 0.0],  # Action 0: no more rewards
-             [0.0, 0.0]]  # Action 1: no more rewards
-        ])
+            # Rewards: R[s, a, s']
+            self.R = np.array([
+                # State 0 (Start)
+                [[0.0, 3, 4],   # Action 0: safe action with small loss risk
+                 [0.0, 1, 2]],  # Action 1: risky action with bigger loss risk
+
+                # State 1 (Terminal)
+                [[0.0, 0.0, 0.0],  # Action 0: no more rewards
+                 [0.0, 0.0, 0.0]],  # Action 1: no more rewards
+
+                # State 1 (Terminal)
+                [[0.0, 0.0, 0.0],  # Action 0: no more rewards
+                 [0.0, 0.0, 0.0]]  # Action 1: no more rewards
+            ])
+        else:
+            self.P = np.array([
+                # State 0 (Start)
+                [[0.0, 0.3, 0.7, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.7, 0.3, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 1
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 2
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]],  # Action 1
+
+                # State 3
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]],  # Action 1
+
+                # State 4
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]],  # Action 1
+
+                # State 5 (Terminal)
+                [[0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]], # Action 1
+
+                # State 6 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 7 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 8 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+            ])
+
+            # Rewards: R[s, a, s']
+            self.R = np.array([
+                # State 0 (Start)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 1
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 2
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0]],  # Action 1
+
+                # State 3
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0]],  # Action 1
+
+                # State 4
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]],  # Action 1
+
+                # State 5 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 6 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 7 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+
+                # State 8 (Terminal)
+                [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Action 0
+                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],  # Action 1
+            ])
 
         self.Ns = len(self.P)
 
     def states(self):
         """ iterator over all possible states """
-        for s in range(self.Ns-1):
+        if self.Rewards_s_a_s1:
+            Ns = self.Ns - 2
+        else:
+            Ns = self.Ns - 4
+        for s in range(Ns):
             yield State(s)
 
     def transitions(self, s):
@@ -97,7 +158,13 @@ class SimpleEnv:
             all_transitions.append(action_transitions)
 
         return all_transitions
-        # return [[Transition(state=states[s_], prob=float(self.P[s, a, s_]), reward=float(self.R[s, a, s_])) for s_ in range(3) if self.P[s, a, s_] > 0] for a in self.ACTIONS]
+
+    def sample_transition(self, s, a):
+        """ Sample a transition from state s given action a """
+        transitions = self.transitions(s)[a]
+        probs = [t.prob for t in transitions]
+        idx = np.random.choice(len(transitions), p=probs)
+        return transitions[idx]
 
 if __name__ == '__main__':
     world = SimpleEnv()
