@@ -1,10 +1,6 @@
 import copy
-import pickle
 
 import numpy as np
-
-from algorithms.utils import UniformProbabilisticPolicy
-from environments.simple_env import SimpleEnv
 
 
 def value_update(world, V, Pol, i, discount):
@@ -23,16 +19,12 @@ def value_update(world, V, Pol, i, discount):
     return V
 
 
-def value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
+def policy_evaluation_standard(world, max_iters=1e3, eps_convergence=1e-3, Pol=None, discount=0.95):
     V = np.zeros(world.Ns)
-    Pol = UniformProbabilisticPolicy(world)
-
-    DISCOUNT = 0.95
-
     i = 0
     while True:
         V_prev = copy.deepcopy(V)
-        V_new = value_update(world, V, Pol, i, DISCOUNT)
+        V_new = value_update(world, V, Pol, i, discount)
         error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
         V = V_new
@@ -47,21 +39,20 @@ def value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
 
     return V
 
-
-def main():
-    PERFORM_VI = True
-    # MAX_ITERS = 40
-    MAX_ITERS = 1000
-    TOLL = 1e-3
-
-    np.random.seed(2)
-    if PERFORM_VI:
-        # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        world = SimpleEnv()
-        V = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        pickle.dump(V, open('standard_vi.pkl', mode='wb'))
-        print('Value function:', V)
-
-
-if __name__ == '__main__':
-    main()
+# def main():
+#     PERFORM_VI = True
+#     # MAX_ITERS = 40
+#     MAX_ITERS = 1000
+#     TOLL = 1e-3
+#
+#     np.random.seed(2)
+#     if PERFORM_VI:
+#         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+#         world = SimpleEnv()
+#         V = policy_evaluation_standard(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+#         pickle.dump(V, open('../standard_vi.pkl', mode='wb'))
+#         print('Value function:', V)
+#
+#
+# if __name__ == '__main__':
+#     main()

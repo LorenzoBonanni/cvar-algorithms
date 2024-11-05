@@ -1,13 +1,8 @@
 import copy
-import pickle
 
 import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, CPLEX_PY
 from tqdm import tqdm
-
-from environments.simple_env import SimpleEnv
-from utils import UniformProbabilisticPolicy
-
 
 # IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a,s')
 
@@ -187,13 +182,11 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
     return V
 
 
-def cvar_policy_evaluation(world, max_iters=1e3, eps_convergence=1e-3):
-    Ny = 21
-    V = np.zeros((Ny, world.Ns))
-    Y_set_all = np.ones((world.Ns, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
+def cvar_policy_evaluation(world, max_iters=1e3, eps_convergence=1e-3, alpha_set=None, discount=0.95, policy=None):
+    V = np.zeros((len(alpha_set), world.Ns))
+    Y_set_all = np.ones((world.Ns, 1)) * alpha_set
     i = 0
-    discount = 0.95
-    Pol = UniformProbabilisticPolicy(world)
+    Pol = policy
     while True:
         V_prev = copy.deepcopy(V)
         V_new = cvar_value_update(world, V, Pol, i, Y_set_all, discount=discount)
@@ -212,20 +205,20 @@ def cvar_policy_evaluation(world, max_iters=1e3, eps_convergence=1e-3):
     return V
 
 
-def main():
-    PERFORM_VI = True
-    MAX_ITERS = 1000
-    TOLL = 1e-3
-
-    np.random.seed(2)
-    if PERFORM_VI:
-        # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        world = SimpleEnv()
-        V = cvar_policy_evaluation(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('vi_test.pkl', mode='wb'))
-        print(V[:, 0])
-        pickle.dump(V, open('cvar_pe.pkl', mode='wb'))
-
-
-if __name__ == '__main__':
-    main()
+# def main():
+#     PERFORM_VI = True
+#     MAX_ITERS = 1000
+#     TOLL = 1e-3
+#
+#     np.random.seed(2)
+#     if PERFORM_VI:
+#         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+#         world = SimpleEnv()
+#         V = cvar_policy_evaluation(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+#         # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('vi_test.pkl', mode='wb'))
+#         print(V[:, 0])
+#         pickle.dump(V, open('../cvar_pe.pkl', mode='wb'))
+#
+#
+# if __name__ == '__main__':
+#     main()
