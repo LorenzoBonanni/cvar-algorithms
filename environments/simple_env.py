@@ -166,6 +166,12 @@ class SimpleEnv:
         idx = np.random.choice(len(transitions), p=probs)
         return transitions[idx]
 
+    def is_terminal(self, s):
+        if self.Rewards_s_a_s1:
+            return s.id >= self.Ns - 2
+        else:
+            return s.id >= self.Ns - 4
+
 if __name__ == '__main__':
     world = SimpleEnv()
     for s in world.states():

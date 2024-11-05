@@ -2,11 +2,10 @@ import copy
 import pickle
 
 import numpy as np
-from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, PULP_CBC_CMD, CPLEX_PY
+from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, CPLEX_PY
 from tqdm import tqdm
 
-from cliffwalker import GridWorld
-from simple_env import SimpleEnv
+from environments.simple_env import SimpleEnv
 
 # IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a)
 

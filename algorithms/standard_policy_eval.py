@@ -2,9 +2,9 @@ import copy
 import pickle
 
 import numpy as np
-from tqdm import tqdm
 
-from simple_env import SimpleEnv
+from algorithms.utils import UniformProbabilisticPolicy
+from environments.simple_env import SimpleEnv
 
 
 def value_update(world, V, Pol, i, discount):
@@ -17,23 +17,22 @@ def value_update(world, V, Pol, i, discount):
                 Q += t.prob * (t.reward + discount * V_[t.state.id])
             q_values.append(Q)
 
-        Pol[s.id] = np.argmax(q_values)
-        V[s.id] = q_values[Pol[s.id]]
+        policy_probs = Pol.policy[s.id]
+        V[s.id] = (policy_probs * np.array(q_values)).sum()
 
-    return V, Pol
-
-
+    return V
 
 
 def value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
     V = np.zeros(world.Ns)
-    Pol = np.zeros_like(V, dtype=int)
+    Pol = UniformProbabilisticPolicy(world)
+
     DISCOUNT = 0.95
 
     i = 0
     while True:
         V_prev = copy.deepcopy(V)
-        V_new, Pol = value_update(world, V, Pol, i, DISCOUNT)
+        V_new = value_update(world, V, Pol, i, DISCOUNT)
         error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
         V = V_new
@@ -46,7 +45,7 @@ def value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
             break
         i += 1
 
-    return V, Pol
+    return V
 
 
 def main():
@@ -59,9 +58,10 @@ def main():
     if PERFORM_VI:
         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
         world = SimpleEnv()
-        V, Policy = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        pickle.dump((V, Policy), open('standard_vi.pkl', mode='wb'))
+        V = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        pickle.dump(V, open('standard_vi.pkl', mode='wb'))
         print('Value function:', V)
-        print('Policy:', Policy)
+
+
 if __name__ == '__main__':
     main()

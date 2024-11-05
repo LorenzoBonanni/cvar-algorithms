@@ -4,7 +4,7 @@ import numpy as np
 import pulp
 from pulp import PULP_CBC_CMD
 
-from simple_env import SimpleEnv, State
+from environments.simple_env import SimpleEnv, State
 
 alpha = 0.01
 alpha_i =  0.01

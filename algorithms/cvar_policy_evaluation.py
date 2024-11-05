@@ -5,7 +5,9 @@ import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, CPLEX_PY
 from tqdm import tqdm
 
-from simple_env import SimpleEnv
+from environments.simple_env import SimpleEnv
+from utils import UniformProbabilisticPolicy
+
 
 # IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a,s')
 
@@ -178,27 +180,23 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
         t_values = t_values.sum(axis=-1)
         objective[:, 1:] = t_values
 
-        # rewards_1 = np.array([get_transition_information(transitions[a])[2] for a in world.ACTIONS])
-        # Q_1 = np.min(rewards_1[:, np.newaxis, :] + discount * objective[:, :, np.newaxis], axis=-1)
-
         Q = objective
-        for alpha_idx2 in range(len(alpha_set)):
-            Pol[alpha_idx2, s.id] = np.argmax(Q[:, alpha_idx2])
-            V[alpha_idx2, s.id] = Q[Pol[alpha_idx2, s.id], alpha_idx2]
+        policy_probs = np.expand_dims(Pol.policy[s.id], axis=1)
+        V[:, s.id] = (policy_probs * Q).sum(axis=0)
 
-    return V, Pol
+    return V
 
 
-def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
-    Ny = 3
+def cvar_policy_evaluation(world, max_iters=1e3, eps_convergence=1e-3):
+    Ny = 21
     V = np.zeros((Ny, world.Ns))
-    Pol = np.zeros_like(V, dtype=int)
     Y_set_all = np.ones((world.Ns, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
     i = 0
     discount = 0.95
+    Pol = UniformProbabilisticPolicy(world)
     while True:
         V_prev = copy.deepcopy(V)
-        V_new, Pol = cvar_value_update(world, V, Pol, i, Y_set_all, discount=discount)
+        V_new = cvar_value_update(world, V, Pol, i, Y_set_all, discount=discount)
         error = np.max(np.abs(V_new - V_prev))
         print('Iteration:{}, error={}'.format(i, error))
         V = V_new
@@ -211,12 +209,11 @@ def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
             break
         i += 1
 
-    return V, Pol
+    return V
 
 
 def main():
     PERFORM_VI = True
-    # MAX_ITERS = 40
     MAX_ITERS = 1000
     TOLL = 1e-3
 
@@ -224,55 +221,11 @@ def main():
     if PERFORM_VI:
         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
         world = SimpleEnv()
-        V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        V = cvar_policy_evaluation(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
         # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('vi_test.pkl', mode='wb'))
-        print(V)
-        print(Policy)
-        pickle.dump((V, Policy), open('cvar_vi.pkl', mode='wb'))
+        print(V[:, 0])
+        pickle.dump(V, open('cvar_pe.pkl', mode='wb'))
 
 
 if __name__ == '__main__':
     main()
-
-    # # ============================= load
-    # world, V = pickle.load(open('data/models/vi_test.pkl', 'rb'))
-    # # indexes = [2, 11, 20]
-    # alphas = np.concatenate(([0], np.logspace(-2, 0, 20)))
-    # # alphas = alphas[1:]
-    # # ============================= RUN
-    # CvarValues = [np.array([V.V[ix].cvar_alpha(alpha) for ix in np.ndindex(V.V.shape)]).reshape(V.V.shape) for alpha in alphas]
-    # CvarValues = np.array(CvarValues)
-    # # CvarValues = np.array([CvarValues[i].flatten(order='F') for i in range(CvarValues.shape[0])])
-    # matlabValues =  -scipy.io.loadmat('data/models/value.mat')['im']
-    # # CvarValues[matlabValues == 0] = 0
-    # matlab_alpha1 = matlabValues[-1, :, :]
-    # python_alpha1 = CvarValues[-1, :, :]
-    # # print(np.isclose(matlab_alpha1, python_alpha1, atol=1e-2).all())
-    # alphas = [1.0]
-    # # ============================= PLOT
-    # for alpha in alphas:
-    #     print(alpha)
-    #     pm = InteractivePlotMachine(world, V, alpha=alpha)
-    #     pm.fig.savefig('data/figures/vi_{}.png'.format(alpha))
-    #     # pm.show()
-
-    # =============== VI stats
-    # nb_epochs = int(100)
-    # rewards_sample = []
-    # for alpha in [0.1, 0.25, 0.5, 1.]:
-    #     _, rewards = policy_stats(world, XiBasedPolicy(V, alpha), alpha, nb_epochs=nb_epochs)
-    #     rewards_sample.append(rewards)
-    # np.save('files/sample_rewards_tamar.npy', np.array(rewards_sample))
-    # policy_stats(world, var_policy, alpha, nb_epochs=nb_epochs)
-
-    # =============== plot dynamic
-    # alpha = 0.5
-    # V_visual = np.array([[V.V[i, j].cvar_alpha(alpha) for j in range(len(V.V[i]))] for i in range(len(V.V))])
-    # # print(V_visual)
-    # plot_machine = PlotMachine(world, V_visual)
-    # # policy = var_policy
-    # policy = XiBasedPolicy(V, alpha)
-    # for i in range(10):
-    #     S, A, R = epoch(world, policy, plot_machine=plot_machine)
-    #     print('{}: {}'.format(i, np.sum(R)))
-    #     policy.reset()
