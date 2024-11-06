@@ -6,8 +6,8 @@ from environments.simple_env import SimpleEnv, State
 
 def get_return(env, policy, gamma):
     ret = 0
-    state = State(0)
     i = 0
+    state = env.initial_state
     while not env.is_terminal(state):
         action = policy.get_action(state)
         t = env.sample_transition(state, action)

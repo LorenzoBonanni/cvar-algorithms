@@ -24,7 +24,9 @@ class SimpleEnv:
     ACTION_NAMES = {STAY: "Stay", SWITCH: "Switch"}
     Rewards_s_a_s1 = False
 
+
     def __init__(self):
+        self.initial_state = State(0)
         if self.Rewards_s_a_s1:
             self.P = np.array([
                 # State 0 (Start)
