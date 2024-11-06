@@ -3,6 +3,7 @@ import pickle
 
 import numpy as np
 
+from environments.autonomous_car import AutonomousCarNavigation
 from environments.simple_env import SimpleEnv
 
 
@@ -10,7 +11,7 @@ def value_update(world, V, Pol, i, discount):
     V_ = copy.deepcopy(V)
     for s in world.states():
         q_values = []
-        for a in world.ACTIONS:
+        for a in world.actions(s):
             Q = 0
             for t in world.transitions(s)[a]:
                 Q += t.prob * (t.reward + discount * V_[t.state.id])
@@ -57,10 +58,15 @@ def main():
     np.random.seed(2)
     if PERFORM_VI:
         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        world = SimpleEnv()
+        world = AutonomousCarNavigation()
         V, Policy = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        Policy_ = Policy.reshape(world.height, world.width).astype(str)
+        for i in range(world.height):
+            for j in range(world.width):
+                Policy_[i, j] = world.ACTION_NAMES[int(Policy_[i, j])]
+        print(Policy_)
         pickle.dump((V, Policy), open('standard_vi.pkl', mode='wb'))
-        print('Value function:', V)
-        print('Policy:', Policy)
+        world.plot_navigation_graph_policy(Policy, fr'expected')
+        world.plot_value_function(V, 'expected')
 if __name__ == '__main__':
     main()

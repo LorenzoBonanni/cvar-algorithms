@@ -1,4 +1,5 @@
 from collections import namedtuple
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -15,7 +16,7 @@ class State:
         self.id = int(np.ravel_multi_index((y, x), (self.NROW, self.NCOL)))
 
     def __eq__(self, other):
-        return self.y == other.y and self.x == other.x
+        return (self.id == other.id) or (self.y == other.y and self.x == other.x)
 
     def __hash__(self):
         return self.id
@@ -33,6 +34,7 @@ class AutonomousCarNavigation:
     ACTION_UP = 2
     ACTION_DOWN = 3
     ACTIONS = [ACTION_LEFT, ACTION_RIGHT, ACTION_UP, ACTION_DOWN]
+    ACTION_NAMES = ['LEFT', 'RIGHT', 'UP', 'DOWN']
     # Define road types and their corresponding colors
     ROAD_TYPES = {
         'highway': 'black',
@@ -73,6 +75,7 @@ class AutonomousCarNavigation:
         self.goal = State(x=4, y=0, NROW=self.height, NCOL=self.width)
         self.goal_states = {self.goal}
         self.map = self.create_navigation_graph()
+        self.Ns  = self.height * self.width
 
     def create_navigation_graph(self):
         G = nx.Graph()
@@ -144,13 +147,68 @@ class AutonomousCarNavigation:
 
         plt.legend(handles=[plt.Line2D([0], [0], color=color, lw=4, label=road_type) for road_type, color in
                             self.ROAD_TYPES.items()], loc='center right', bbox_to_anchor=(0.9, 0.5), fontsize='x-large')
-        plt.savefig('navigation_graph.png')
+        plt.savefig('../plots/navigation_graph.png')
+
+    def plot_navigation_graph_policy(self, policy, suffix):
+        G = self.map
+        plt.figure(figsize=(12, 10))
+        pos = nx.get_node_attributes(G, 'pos')
+
+        # Draw nodes
+        nx.draw_networkx_nodes(G, pos, node_size=500, node_color='white', edgecolors='black')
+
+        # Draw edges
+        for (u, v, data) in G.edges(data=True):
+            state = State(x=u[0], y=u[1], NROW=self.height, NCOL=self.width)
+            id_state = state.id
+            action = policy[id_state]
+            s_ = self.target_state(state, action)
+            if (s_.x, s_.y) == (v[0], v[1]):
+                arrow = True
+            else:
+                arrow = False
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], edge_color=self.ROAD_TYPES[data['type']], width=2*(int(arrow)+1))
+        # Draw labels
+        labels = {node: f"({node[0]},{node[1]})" for node in G.nodes()}
+        nx.draw_networkx_labels(G, pos, labels, font_size=8)
+
+        # Highlight start and goal
+        nx.draw_networkx_nodes(G, pos, nodelist=[(self.start.x, self.start.y)], node_color='yellow', node_size=700,
+                               edgecolors='black')
+        nx.draw_networkx_nodes(G, pos, nodelist=[(self.goal.x, self.goal.y)], node_color='red', node_size=700,
+                               edgecolors='black')
+
+        plt.title(f"Autonomous Car Navigation Domain {suffix}")
+        plt.axis('off')
+
+        plt.tight_layout()
+
+        plt.legend(handles=[plt.Line2D([0], [0], color=color, lw=4, label=road_type) for road_type, color in
+                            self.ROAD_TYPES.items()], loc='center right', bbox_to_anchor=(0.9, 0.5), fontsize='x-large')
+        plt.savefig(f'../plots/navigation_graph_{suffix}.png')
+        plt.close()
 
     def states(self):
         """ iterator over all possible states """
-        for y in range(4):
-            for x in range(5):
-                yield State(x=x, y=y)
+        for y in range(self.height):
+            for x in range(self.width):
+                if (x, y) == (self.goal.x, self.goal.y):
+                    continue
+                yield State(x=x, y=y, NROW=self.height, NCOL=self.width)
+
+    def actions(self, s):
+        actions = self.ACTIONS.copy()
+        if s.x == 0:
+            actions.remove(self.ACTION_LEFT)
+        elif s.x == self.width - 1:
+            actions.remove(self.ACTION_RIGHT)
+
+        if s.y == 0:
+            actions.remove(self.ACTION_DOWN)
+        elif s.y == self.height - 1:
+            actions.remove(self.ACTION_UP)
+
+        return actions
 
     def target_state(self, s, a):
         """ Return the next deterministic state """
@@ -176,34 +234,49 @@ class AutonomousCarNavigation:
         transitions_full = []
         if s == self.goal:
             return [[Transition(self.goal, 1.0, self.GOAL_REWARD)] for _ in self.ACTIONS]
-        if (s.x, s.y) in self.map:
-            for a in self.ACTIONS:
-                transitions_actions = []
-                next_state = self.target_state(s, a)
-                if next_state == s:
-                    transitions_actions.append(Transition(next_state, 1.0, 0.0))
-                else:
-                    edge_type = self.map.get_edge_data((s.x, s.y), (next_state.x, next_state.y))
-                    time_taken = self.TIME_TAKEN[edge_type['type']]
-                    prob = self.probabilities[edge_type['type']][0]
-                    transitions_actions = [Transition(next_state, float(prob[i]), -time_taken[i]) for i in
-                                           range(len(time_taken))]
-                transitions_full.append(transitions_actions)
+
+        for a in self.ACTIONS:
+            transitions_actions = []
+            next_state = self.target_state(s, a)
+            if next_state == s:
+                transitions_actions.append(Transition(next_state, 1.0, 0.0))
+            else:
+                edge_type = self.map.get_edge_data((s.x, s.y), (next_state.x, next_state.y))
+                time_taken = self.TIME_TAKEN[edge_type['type']]
+                prob = self.probabilities[edge_type['type']][0]
+                transitions_actions = [Transition(next_state, float(prob[i]), -time_taken[i]) for i in
+                                       range(len(time_taken))]
+            transitions_full.append(transitions_actions)
+
         return transitions_full
 
+    def plot_value_function(self, value, suffix):
+        plt.figure(figsize=(12, 10))
+        reshaped_value = value.reshape(self.height, self.width)
+        plt.imshow(reshaped_value, cmap='viridis')
+        for (i, j), val in np.ndenumerate(reshaped_value):
+            plt.text(j, i, f'{val:.2f}', ha='center', va='center', color='white')
+        plt.colorbar()
+        plt.title(f"Value function {suffix}")
+        plt.xticks(np.arange(self.width), np.arange(self.width))
+        plt.yticks(np.arange(self.height), np.arange(self.height))
+        plt.tight_layout()
+        plt.savefig(f'../plots/value_function_{suffix}.png')
+        plt.close()
 
-# Create and plot the graph
-env = AutonomousCarNavigation()
-G = env.map
-env.plot_navigation_graph()
 
-# Print some information about the graph
-print(f"Number of nodes: {G.number_of_nodes()}")
-print(f"Number of edges: {G.number_of_edges()}")
-print("\nExample of node neighbors:")
-print(f"Neighbors of node (0, 0): {list(G.neighbors((0, 0)))}")
-print("\nExample of edge data:")
-print(f"Edge between (0, 0) and (1, 0): {G.get_edge_data((0, 0), (1, 0))}")
-print(
-    env.transitions(env.initial_state)
-)
+# # Create and plot the graph
+#
+# G = env.map
+# env.plot_navigation_graph()
+#
+# # Print some information about the graph
+# print(f"Number of nodes: {G.number_of_nodes()}")
+# print(f"Number of edges: {G.number_of_edges()}")
+# print("\nExample of node neighbors:")
+# print(f"Neighbors of node (0, 0): {list(G.neighbors((0, 0)))}")
+# print("\nExample of edge data:")
+# print(f"Edge between (0, 0) and (1, 0): {G.get_edge_data((0, 0), (1, 0))}")
+# print(
+#     env.transitions(env.initial_state)
+# )

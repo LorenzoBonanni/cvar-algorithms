@@ -5,7 +5,7 @@ import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, CPLEX_PY
 from tqdm import tqdm
 
-from environments.simple_env import SimpleEnv
+from environments.autonomous_car import AutonomousCarNavigation
 
 # IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a,s')
 
@@ -102,6 +102,18 @@ def get_deterministic_reward(transitions):
 
     return np.array(rewards)
 
+def dynamic_reshape(arr, n_trans_list, num_alpha):
+    # Calculate cumulative sizes for splitting
+    split_indices = np.cumsum([0] + [(num_alpha-1) * n for n in n_trans_list])
+
+    # Split the array based on n_trans_list
+    split_arrays = np.split(arr, split_indices[1:-1])
+
+    # Reshape each split array
+    reshaped_arrays = [arr_split.reshape(num_alpha-1, n_trans)
+                       for arr_split, n_trans in zip(split_arrays, n_trans_list)]
+    return reshaped_arrays
+
 
 def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
     """
@@ -130,9 +142,11 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
         objective = np.zeros((len(world.ACTIONS), len(alpha_set)))
 
         counter = 0
+        n_trans_list = []
         for a in world.ACTIONS:
             transitions_ids, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
             n_trans = len(transitions_ids)
+            n_trans_list.append(n_trans)
             for alpha_idx, alpha in enumerate(alpha_set):
                 if alpha == 0:
                     # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
@@ -170,16 +184,13 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
 
         solver += sum(ts)
         xi_values, t_values = solve_problem(solver)
-        xi_values = xi_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
-        t_values = t_values.reshape((len(world.ACTIONS), len(alpha_set) - 1, -1))
+        xi_values = dynamic_reshape(xi_values, n_trans_list, len(alpha_set))
+        t_values = dynamic_reshape(t_values, n_trans_list, len(alpha_set))
         for a in world.ACTIONS:
             _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
-            t_values[a] = xi_values[a] * transitions_rewards * transitions_probabilities + t_values[a]
-        t_values = t_values.sum(axis=-1)
-        objective[:, 1:] = t_values
+            t_values[a] = (xi_values[a] * transitions_rewards * transitions_probabilities + t_values[a]).sum(-1)
 
-        # rewards_1 = np.array([get_transition_information(transitions[a])[2] for a in world.ACTIONS])
-        # Q_1 = np.min(rewards_1[:, np.newaxis, :] + discount * objective[:, :, np.newaxis], axis=-1)
+        objective[:, 1:] = np.array(t_values)
 
         Q = objective
         for alpha_idx2 in range(len(alpha_set)):
@@ -189,11 +200,11 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
     return V, Pol
 
 
-def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
-    Ny = 3
-    V = np.zeros((Ny, world.Ns))
+def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3, alphas=None):
+
+    V = np.zeros((len(alphas), world.Ns))
     Pol = np.zeros_like(V, dtype=int)
-    Y_set_all = np.ones((world.Ns, 1)) * np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
+    Y_set_all = np.ones((world.Ns, 1)) * alphas
     i = 0
     discount = 0.95
     while True:
@@ -215,21 +226,28 @@ def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3):
 
 
 def main():
-    PERFORM_VI = True
+    PERFORM_VI = False
     # MAX_ITERS = 40
     MAX_ITERS = 1000
     TOLL = 1e-3
+    Ny = 21
+    alphas = np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
 
     np.random.seed(2)
     if PERFORM_VI:
         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        world = SimpleEnv()
-        V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
+        world = AutonomousCarNavigation()
+        V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL, alphas=alphas)
         # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('vi_test.pkl', mode='wb'))
         print(V)
         print(Policy)
         pickle.dump((V, Policy), open('cvar_vi.pkl', mode='wb'))
 
+    V, Policy = pickle.load(open('cvar_vi.pkl', mode='rb'))
+    world = AutonomousCarNavigation()
+    for idx, alpha in enumerate(alphas):
+        world.plot_navigation_graph_policy(Policy[idx], fr'$\alpha$={alpha}')
+        world.plot_value_function(V[idx], fr'$\alpha$={alpha}')
 
 if __name__ == '__main__':
     main()

@@ -15,7 +15,7 @@ def main():
     TOLL = 1e-3
     Ny = 21
     DISCOUNT = 0.95
-    NUM_SAMPLES = 2_000_000
+    NUM_SAMPLES = 1_000_000
 
     alphas = np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
     world = SimpleEnv()
