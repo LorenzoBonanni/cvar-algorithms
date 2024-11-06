@@ -1,5 +1,6 @@
 from collections import namedtuple
 from copy import deepcopy
+from functools import partial
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -8,12 +9,14 @@ import numpy as np
 
 # a state is given by row and column positions designated (y, x)
 class State:
-    def __init__(self, y, x, NROW=14, NCOL=16):
+    def __init__(self, y, x, NROW=14, NCOL=16, NTYPES=3, type=0):
         self.y = y
         self.x = x
         self.NROW = NROW
         self.NCOL = NCOL
-        self.id = int(np.ravel_multi_index((y, x), (self.NROW, self.NCOL)))
+        self.NTYPES = NTYPES
+        self.type = type
+        self.id = int(np.ravel_multi_index((y, x, type), (NROW, NCOL, NTYPES)))
 
     def __eq__(self, other):
         return (self.id == other.id) or (self.y == other.y and self.x == other.x)
@@ -22,7 +25,10 @@ class State:
         return self.id
 
     def __repr__(self):
-        return f"({self.y}, {self.x})"
+        return f"({self.y}, {self.x}, {self.type})"
+
+    def __copy__(self):
+        return State(self.y, self.x, self.NROW, self.NCOL, self.NTYPES, self.type)
 
 
 Transition = namedtuple('Transition', ['state', 'prob', 'reward'])
@@ -70,12 +76,15 @@ class AutonomousCarNavigation:
     def __init__(self):
         self.height = 4
         self.width = 5
-        self.start = State(x=0, y=3, NROW=self.height, NCOL=self.width)
+        self.ntypes = 3
+        self.State = partial(State, NROW=self.height, NCOL=self.width, NTYPES=self.ntypes)
+        self.start = self.State(x=0, y=3, type=0)
         self.initial_state = self.start
-        self.goal = State(x=4, y=0, NROW=self.height, NCOL=self.width)
-        self.goal_states = {self.goal}
+        self.goal = self.State(x=4, y=0, type=0)
+        self.goal_states = {self.State(x=4, y=0, type=t) for t in range(self.ntypes)}
         self.map = self.create_navigation_graph()
-        self.Ns  = self.height * self.width
+        self.Ns  = self.height * self.width * self.ntypes
+
 
     def create_navigation_graph(self):
         G = nx.Graph()
@@ -118,6 +127,89 @@ class AutonomousCarNavigation:
 
         return G
 
+    def states(self):
+        """ iterator over all possible states """
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.State(x=x, y=y) in self.goal_states:
+                    continue
+                for t in range(self.ntypes):
+                    yield self.State(x=x, y=y, type=t)
+
+    def actions(self, s):
+        actions = self.ACTIONS.copy()
+        if s.x == 0:
+            actions.remove(self.ACTION_LEFT)
+        elif s.x == self.width - 1:
+            actions.remove(self.ACTION_RIGHT)
+
+        if s.y == 0:
+            actions.remove(self.ACTION_DOWN)
+        elif s.y == self.height - 1:
+            actions.remove(self.ACTION_UP)
+
+        return actions
+
+    def target_state(self, s, a):
+        """ Return the next deterministic state """
+        x = s.x
+        y = s.y
+        if a == self.ACTION_LEFT:
+            return self.State(x=max(x - 1, 0), y=y)
+        if a == self.ACTION_RIGHT:
+            return self.State(x=min(x + 1, self.width - 1), y=y)
+        if a == self.ACTION_UP:
+            return self.State(x=x, y=min(y + 1, self.height - 1))
+        if a == self.ACTION_DOWN:
+            return self.State(x=x, y=max(y - 1, 0))
+
+    def is_terminal(self, s):
+        return s in self.goal_states
+
+    def transitions(self, s):
+        """
+        Return a list of (state, prob, reward) triples, where prob is the
+        probability of transitioning to state with reward.
+        """
+        transitions_full = []
+        if s in self.goal_states:
+            return [[Transition(self.goal, 1.0, self.GOAL_REWARD)] for _ in self.ACTIONS]
+
+        for a in self.ACTIONS:
+            next_state = self.target_state(s, a)
+            if next_state in self.goal_states:
+                reward = self.GOAL_REWARD
+            else:
+                reward = 0
+
+            if next_state == s:
+                next_states = [self.State(x=next_state.x, y=next_state.y, type=t) for t in range(self.ntypes)]
+                transitions_actions = [Transition(next_states[i], 1/3, 0) for i in range(len(next_states))]
+            else:
+                edge_type = self.map.get_edge_data((s.x, s.y), (next_state.x, next_state.y))
+                time_taken = self.TIME_TAKEN[edge_type['type']]
+                prob = self.probabilities[edge_type['type']][0]
+                next_states = [self.State(x=next_state.x, y=next_state.y, type=t) for t in range(self.ntypes)]
+                transitions_actions = [Transition(next_states[i], float(prob[i]), -time_taken[i]+reward) for i in
+                                       range(len(time_taken))]
+            transitions_full.append(transitions_actions)
+
+        return transitions_full
+
+    def plot_value_function(self, value, suffix):
+        plt.figure(figsize=(12, 10))
+        reshaped_value = value.reshape(self.height, self.width, self.ntypes)
+        plt.imshow(reshaped_value, cmap='viridis')
+        for (i, j), val in np.ndenumerate(reshaped_value):
+            plt.text(j, i, f'{val:.2f}', ha='center', va='center', color='white')
+        plt.colorbar()
+        plt.title(f"Value function {suffix}")
+        plt.xticks(np.arange(self.width), np.arange(self.width))
+        plt.yticks(np.arange(self.height), np.arange(self.height))
+        plt.tight_layout()
+        plt.savefig(f'../plots/value_function_{suffix}.png')
+        plt.close()
+
     def plot_navigation_graph(self):
         G = self.map
         plt.figure(figsize=(12, 10))
@@ -149,25 +241,24 @@ class AutonomousCarNavigation:
                             self.ROAD_TYPES.items()], loc='center right', bbox_to_anchor=(0.9, 0.5), fontsize='x-large')
         plt.savefig('../plots/navigation_graph.png')
 
-    def plot_navigation_graph_policy(self, policy, suffix):
+    def plot_trajectory(self, policy, suffix):
         G = self.map
         plt.figure(figsize=(12, 10))
         pos = nx.get_node_attributes(G, 'pos')
 
         # Draw nodes
         nx.draw_networkx_nodes(G, pos, node_size=500, node_color='white', edgecolors='black')
+        s0 = self.initial_state
+        s = deepcopy(s0)
+        while s not in self.goal_states:
+            action = policy[s.id]
+            u = (s.x, s.y)
+            next_state = self.target_state(s, action)
+            v = (next_state.x, next_state.y)
+            s = next_state
+            data = G.get_edge_data(u, v)
+            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], edge_color=self.ROAD_TYPES[data['type']], width=2)
 
-        # Draw edges
-        for (u, v, data) in G.edges(data=True):
-            state = State(x=u[0], y=u[1], NROW=self.height, NCOL=self.width)
-            id_state = state.id
-            action = policy[id_state]
-            s_ = self.target_state(state, action)
-            if (s_.x, s_.y) == (v[0], v[1]):
-                arrow = True
-            else:
-                arrow = False
-            nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], edge_color=self.ROAD_TYPES[data['type']], width=2*(int(arrow)+1))
         # Draw labels
         labels = {node: f"({node[0]},{node[1]})" for node in G.nodes()}
         nx.draw_networkx_labels(G, pos, labels, font_size=8)
@@ -185,85 +276,12 @@ class AutonomousCarNavigation:
 
         plt.legend(handles=[plt.Line2D([0], [0], color=color, lw=4, label=road_type) for road_type, color in
                             self.ROAD_TYPES.items()], loc='center right', bbox_to_anchor=(0.9, 0.5), fontsize='x-large')
-        plt.savefig(f'../plots/navigation_graph_{suffix}.png')
+        plt.savefig(f'../plots/trajectory_traffic_{suffix}.png')
         plt.close()
 
-    def states(self):
-        """ iterator over all possible states """
-        for y in range(self.height):
-            for x in range(self.width):
-                if (x, y) == (self.goal.x, self.goal.y):
-                    continue
-                yield State(x=x, y=y, NROW=self.height, NCOL=self.width)
-
-    def actions(self, s):
-        actions = self.ACTIONS.copy()
-        if s.x == 0:
-            actions.remove(self.ACTION_LEFT)
-        elif s.x == self.width - 1:
-            actions.remove(self.ACTION_RIGHT)
-
-        if s.y == 0:
-            actions.remove(self.ACTION_DOWN)
-        elif s.y == self.height - 1:
-            actions.remove(self.ACTION_UP)
-
-        return actions
-
-    def target_state(self, s, a):
-        """ Return the next deterministic state """
-        x = s.x
-        y = s.y
-        if a == self.ACTION_LEFT:
-            return State(x=max(x - 1, 0), y=y, NROW=self.height, NCOL=self.width)
-        if a == self.ACTION_RIGHT:
-            return State(x=min(x + 1, self.width - 1), y=y, NROW=self.height, NCOL=self.width)
-        if a == self.ACTION_UP:
-            return State(x=x, y=max(y - 1, 0), NROW=self.height, NCOL=self.width)
-        if a == self.ACTION_DOWN:
-            return State(x=x, y=min(y + 1, self.height - 1), NROW=self.height, NCOL=self.width)
-
-    def is_terminal(self, s):
-        return s in self.goal_states
-
-    def transitions(self, s):
-        """
-        Return a list of (state, prob, reward) triples, where prob is the
-        probability of transitioning to state with reward.
-        """
-        transitions_full = []
-        if s == self.goal:
-            return [[Transition(self.goal, 1.0, self.GOAL_REWARD)] for _ in self.ACTIONS]
-
-        for a in self.ACTIONS:
-            transitions_actions = []
-            next_state = self.target_state(s, a)
-            if next_state == s:
-                transitions_actions.append(Transition(next_state, 1.0, 0.0))
-            else:
-                edge_type = self.map.get_edge_data((s.x, s.y), (next_state.x, next_state.y))
-                time_taken = self.TIME_TAKEN[edge_type['type']]
-                prob = self.probabilities[edge_type['type']][0]
-                transitions_actions = [Transition(next_state, float(prob[i]), -time_taken[i]) for i in
-                                       range(len(time_taken))]
-            transitions_full.append(transitions_actions)
-
-        return transitions_full
-
-    def plot_value_function(self, value, suffix):
-        plt.figure(figsize=(12, 10))
-        reshaped_value = value.reshape(self.height, self.width)
-        plt.imshow(reshaped_value, cmap='viridis')
-        for (i, j), val in np.ndenumerate(reshaped_value):
-            plt.text(j, i, f'{val:.2f}', ha='center', va='center', color='white')
-        plt.colorbar()
-        plt.title(f"Value function {suffix}")
-        plt.xticks(np.arange(self.width), np.arange(self.width))
-        plt.yticks(np.arange(self.height), np.arange(self.height))
-        plt.tight_layout()
-        plt.savefig(f'../plots/value_function_{suffix}.png')
-        plt.close()
-
+    def generate_plots(self, policy, value, suffix):
+        self.plot_trajectory(policy, suffix)
+        # self.plot_value_function(value, suffix)
 
 # # Create and plot the graph
 #

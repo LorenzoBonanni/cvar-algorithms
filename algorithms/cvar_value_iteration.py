@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from environments.autonomous_car import AutonomousCarNavigation
 
+
 # IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a,s')
 
 def get_transition_information(action_transitions):
@@ -102,15 +103,16 @@ def get_deterministic_reward(transitions):
 
     return np.array(rewards)
 
+
 def dynamic_reshape(arr, n_trans_list, num_alpha):
     # Calculate cumulative sizes for splitting
-    split_indices = np.cumsum([0] + [(num_alpha-1) * n for n in n_trans_list])
+    split_indices = np.cumsum([0] + [(num_alpha - 1) * n for n in n_trans_list])
 
     # Split the array based on n_trans_list
     split_arrays = np.split(arr, split_indices[1:-1])
 
     # Reshape each split array
-    reshaped_arrays = [arr_split.reshape(num_alpha-1, n_trans)
+    reshaped_arrays = [arr_split.reshape(num_alpha - 1, n_trans)
                        for arr_split, n_trans in zip(split_arrays, n_trans_list)]
     return reshaped_arrays
 
@@ -143,14 +145,16 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
 
         counter = 0
         n_trans_list = []
-        for a in world.ACTIONS:
+        available_actions = world.actions(s)
+        for a in available_actions:
             transitions_ids, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
             n_trans = len(transitions_ids)
             n_trans_list.append(n_trans)
             for alpha_idx, alpha in enumerate(alpha_set):
                 if alpha == 0:
                     # when alpha is 0, the cvar is simply the worst case value, so no expectation over some distribution
-                    objective[a, alpha_idx] = min((transitions_rewards + discount * V_[alpha_idx, transitions_ids]) * transitions_probabilities)
+                    objective[a, alpha_idx] = min(
+                        (transitions_rewards + discount * V_[alpha_idx, transitions_ids]) * transitions_probabilities)
                     continue
 
                 # Create xi variables (non-negative)
@@ -176,7 +180,8 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
                     v_i_next = V_[i + 1, transitions_ids]
                     slope = (alpha_i_next * v_i_next - alpha_i * v_i) / (alpha_i_next - alpha_i)
 
-                    right_ineq = (alpha_i * v_i / alpha - slope * alpha_i / alpha) * discount * transitions_probabilities
+                    right_ineq = (
+                                             alpha_i * v_i / alpha - slope * alpha_i / alpha) * discount * transitions_probabilities
                     left_ineq = t - slope * xi * discount * transitions_probabilities
                     for idx in range(len(right_ineq)):
                         solver += left_ineq[idx] >= right_ineq[idx]
@@ -186,13 +191,15 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
         xi_values, t_values = solve_problem(solver)
         xi_values = dynamic_reshape(xi_values, n_trans_list, len(alpha_set))
         t_values = dynamic_reshape(t_values, n_trans_list, len(alpha_set))
-        for a in world.ACTIONS:
+        for idx, a in enumerate(available_actions):
             _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
-            t_values[a] = (xi_values[a] * transitions_rewards * transitions_probabilities + t_values[a]).sum(-1)
+            t_values[idx] = (xi_values[idx] * transitions_rewards * transitions_probabilities + t_values[idx]).sum(-1)
 
-        objective[:, 1:] = np.array(t_values)
-
+        objective[available_actions, 1:] = np.array(t_values)
+        unavailable_actions = set(range(len(world.ACTIONS))) - set(available_actions)
+        objective[list(unavailable_actions), :] = -np.inf
         Q = objective
+
         for alpha_idx2 in range(len(alpha_set)):
             Pol[alpha_idx2, s.id] = np.argmax(Q[:, alpha_idx2])
             V[alpha_idx2, s.id] = Q[Pol[alpha_idx2, s.id], alpha_idx2]
@@ -201,7 +208,6 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
 
 
 def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3, alphas=None):
-
     V = np.zeros((len(alphas), world.Ns))
     Pol = np.zeros_like(V, dtype=int)
     Y_set_all = np.ones((world.Ns, 1)) * alphas
@@ -226,7 +232,7 @@ def cvar_value_iteration(world, max_iters=1e3, eps_convergence=1e-3, alphas=None
 
 
 def main():
-    PERFORM_VI = False
+    PERFORM_VI = True
     # MAX_ITERS = 40
     MAX_ITERS = 1000
     TOLL = 1e-3
@@ -234,20 +240,16 @@ def main():
     alphas = np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
 
     np.random.seed(2)
+    world = AutonomousCarNavigation()
+    # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
     if PERFORM_VI:
-        # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
-        world = AutonomousCarNavigation()
         V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL, alphas=alphas)
-        # pickle.dump((V.reshape(21, world.height, world.width), Policy.reshape(21, world.height, world.width)), open('vi_test.pkl', mode='wb'))
-        print(V)
-        print(Policy)
         pickle.dump((V, Policy), open('cvar_vi.pkl', mode='wb'))
 
     V, Policy = pickle.load(open('cvar_vi.pkl', mode='rb'))
-    world = AutonomousCarNavigation()
     for idx, alpha in enumerate(alphas):
-        world.plot_navigation_graph_policy(Policy[idx], fr'$\alpha$={alpha}')
-        world.plot_value_function(V[idx], fr'$\alpha$={alpha}')
+        world.generate_plots(Policy[idx], V[idx], fr'$\alpha$={alpha}')
+
 
 if __name__ == '__main__':
     main()

@@ -38,7 +38,7 @@ class GridWorld:
     ACTION_UP = 2
     ACTION_DOWN = 3
     ACTIONS = [ACTION_LEFT, ACTION_RIGHT, ACTION_UP, ACTION_DOWN]
-    FALL_REWARD = -2
+    FALL_REWARD = -40
     ACTION_NAMES = {ACTION_LEFT: "Left", ACTION_RIGHT: "Right", ACTION_UP: "Up", ACTION_DOWN: "Down"}
 
     def __init__(self, height, width, random_action_p=0.1, risky_p_loss=0.15, path=None, goal_pos=(1, 15), start_pos=(12, 15)):
@@ -47,7 +47,7 @@ class GridWorld:
 
         # self.risky_goal_states = {State(0, 5)}
         self.risky_goal_states = {}
-        im = plt.imread(path)
+        im = plt.imread('./'+path)
         im = rgb2gray(im)
         self.height, self.width =  im.shape
         cliff = np.where(im == 0)
@@ -119,6 +119,10 @@ class GridWorld:
 
         return transitions_full
 
+    def actions(self, s):
+        """ returns a list of actions that can be taken from state s """
+        return self.ACTIONS
+
     def sample_transition(self, s, a):
         """ Sample a single transition, duh. """
         trans = self.transitions(s)[a]
@@ -126,6 +130,74 @@ class GridWorld:
         transition = random.choices(population=trans, weights=state_probs)[0]
         return transition
 
+    def plot_value_function(self, value, suffix):
+        plt.figure(figsize=(12, 10))
+        reshaped_value = value.reshape(self.height, self.width)
+        plt.imshow(reshaped_value, cmap='viridis')
+        for (i, j), val in np.ndenumerate(reshaped_value):
+            plt.text(j, i, f'{val:.2f}', ha='center', va='center', color='white')
+        plt.colorbar()
+        plt.title(f"Value function {suffix}")
+        plt.xticks(np.arange(self.width), np.arange(self.width))
+        plt.yticks(np.arange(self.height), np.arange(self.height))
+        plt.tight_layout()
+        plt.savefig(f'../plots/value/value_function_{suffix}.png')
+        plt.close()
+
+    def plot_policy(self, value, policy, suffix):
+        plt.figure(figsize=(12, 10))
+        reshaped_value = value.reshape(self.height, self.width)
+        reshaped_policy = policy.reshape(self.height, self.width)
+        plt.imshow(reshaped_value, cmap='viridis')
+        for (i, j), val in np.ndenumerate(reshaped_value):
+            if State(i, j, self.height, self.width) in self.cliff_states:
+                continue
+            action = reshaped_policy[i, j]
+            if action == self.ACTION_LEFT:
+                plt.arrow(j, i, -0.4, 0, head_width=0.2, head_length=0.2, fc='white', ec='white')
+            elif action == self.ACTION_RIGHT:
+                plt.arrow(j, i, 0.4, 0, head_width=0.2, head_length=0.2, fc='white', ec='white')
+            elif action == self.ACTION_UP:
+                plt.arrow(j, i, 0, -0.4, head_width=0.2, head_length=0.2, fc='white', ec='white')
+            elif action == self.ACTION_DOWN:
+                plt.arrow(j, i, 0, 0.4, head_width=0.2, head_length=0.2, fc='white', ec='white')
+
+        plt.colorbar()
+        plt.title(f"Value function {suffix}")
+        plt.xticks(np.arange(self.width), np.arange(self.width))
+        plt.yticks(np.arange(self.height), np.arange(self.height))
+        plt.tight_layout()
+        plt.savefig(f'../plots/policy/policy_function_{suffix}.png')
+        plt.close()
+
+    def plot_trajectory(self, policy, value, suffix):
+        plt.figure(figsize=(12, 10))
+        reshaped_value = value.reshape(self.height, self.width)
+        reshaped_policy = policy.reshape(self.height, self.width)
+        plt.imshow(reshaped_value, cmap='viridis')
+
+        state = self.initial_state
+        plt.text(state.x, state.y, 'S', ha='center', va='center', color='white', fontsize=20)
+
+        while state not in self.goal_states:
+            action = reshaped_policy[state.y, state.x]
+            next_state = self.target_state(state, action)
+            plt.plot([state.x, next_state.x], [state.y, next_state.y], 'k-o')
+            state = next_state
+
+        plt.text(state.x, state.y, 'G', ha='center', va='center', color='white', fontsize=20)
+        plt.colorbar()
+        plt.title(f"Value function {suffix}")
+        plt.xticks(np.arange(self.width), np.arange(self.width))
+        plt.yticks(np.arange(self.height), np.arange(self.height))
+        plt.tight_layout()
+        plt.savefig(f'../plots/trajectory/trajectory_{suffix}.png')
+        plt.close()
+
+    def generate_plots(self, policy, value, suffix):
+        self.plot_value_function(value, suffix)
+        self.plot_policy(value, policy, suffix)
+        self.plot_trajectory(policy, value, suffix)
 
 #
 # if __name__ == '__main__':
