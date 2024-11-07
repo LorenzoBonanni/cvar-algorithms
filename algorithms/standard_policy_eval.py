@@ -2,16 +2,16 @@ import copy
 
 import numpy as np
 
-
 def value_update(world, V, Pol, i, discount):
     V_ = copy.deepcopy(V)
     for s in world.states():
-        q_values = []
-        for a in world.ACTIONS:
+        q_values = np.full(len(world.ACTIONS), -np.inf)
+        available_actions = world.actions(s)
+        for a in available_actions:
             Q = 0
             for t in world.transitions(s)[a]:
                 Q += t.prob * (t.reward + discount * V_[t.state.id])
-            q_values.append(Q)
+            q_values[a] = Q
 
         policy_probs = Pol.policy[s.id]
         V[s.id] = (policy_probs * np.array(q_values)).sum()

@@ -139,7 +139,8 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
 
         counter = 0
         n_trans_list = []
-        for a in world.ACTIONS:
+        available_actions = world.actions(s)
+        for a in available_actions:
             transitions_ids, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
             n_trans = len(transitions_ids)
             n_trans_list.append(n_trans)
@@ -182,13 +183,15 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
         xi_values, t_values = solve_problem(solver)
         xi_values = dynamic_reshape(xi_values, n_trans_list, len(alpha_set))
         t_values = dynamic_reshape(t_values, n_trans_list, len(alpha_set))
-        for a in world.ACTIONS:
+        for idx, a in enumerate(available_actions):
             _, transitions_probabilities, transitions_rewards = get_transition_information(transitions[a])
             t_values[a] = (xi_values[a] * transitions_rewards * transitions_probabilities + discount * t_values[a]).sum(-1)
 
-        objective[:, 1:] = np.array(t_values)
-
+        objective[available_actions, 1:] = np.array(t_values)
+        unavailable_actions = set(range(len(world.ACTIONS))) - set(available_actions)
+        objective[list(unavailable_actions), :] = -np.inf
         Q = objective
+
         policy_probs = np.expand_dims(Pol.policy[s.id], axis=1)
         V[:, s.id] = (policy_probs * Q).sum(axis=0)
 
