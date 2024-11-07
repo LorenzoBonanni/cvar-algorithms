@@ -14,7 +14,14 @@ def value_update(world, V, Pol, i, discount):
             q_values[a] = Q
 
         policy_probs = Pol.policy[s.id]
-        V[s.id] = (policy_probs * np.array(q_values)).sum()
+        if policy_probs.dtype == np.int64:
+            boolean_probs = policy_probs == 1
+            q_values = q_values[boolean_probs]
+            V[s.id] = q_values[0]
+        else:
+            policy_probs = policy_probs.nonzero()
+            q_values = q_values[q_values != -np.inf]
+            V[s.id] = (policy_probs * np.array(q_values)).sum()
 
     return V
 

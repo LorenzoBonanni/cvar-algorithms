@@ -24,3 +24,14 @@ class UniformProbabilisticPolicy(ProbabilisticPolicy):
     def __init__(self, env):
         policy = np.ones((env.Ns, len(env.ACTIONS))) / len(env.ACTIONS)
         super().__init__(env, policy)
+
+class FixedPolicy(Policy):
+    def __init__(self, env, policy):
+        super().__init__(env)
+
+        self.policy = np.zeros((env.Ns, len(env.ACTIONS)), dtype=int)
+        for s in env.states():
+            self.policy[s.id, policy[s.id]] = 1
+
+    def get_action(self, state):
+        return self.policy[state.id].argmax()

@@ -1,3 +1,4 @@
+import random
 from collections import namedtuple
 from copy import deepcopy
 from functools import partial
@@ -282,6 +283,12 @@ class AutonomousCarNavigation:
     def generate_plots(self, policy, value, suffix):
         self.plot_trajectory(policy, suffix)
         # self.plot_value_function(value, suffix)
+
+    def sample_transition(self, s, a):
+        transitions = self.transitions(s)[a]
+        probs = [t.prob for t in transitions]
+        transition = random.choices(transitions, probs)[0]
+        return transition
 
 # # Create and plot the graph
 #

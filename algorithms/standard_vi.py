@@ -69,6 +69,7 @@ def main():
         #     for j in range(world.width):
         #         Policy_[i, j] = world.ACTION_NAMES[int(Policy_[i, j])]
         # print(Policy_)
+        print(V)
         pickle.dump((V, Policy), open('standard_vi.pkl', mode='wb'))
         world.generate_plots(Policy, V, 'standard_vi')
 if __name__ == '__main__':
