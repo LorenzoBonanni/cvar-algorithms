@@ -7,8 +7,8 @@ import pandas as pd
 from algorithms.cvar_policy_eval_montecarlo import policy_eval_montecarlo
 from algorithms.cvar_policy_evaluation import cvar_policy_evaluation
 from algorithms.standard_policy_eval import policy_evaluation_standard
-from algorithms.utils import ProbabilisticPolicy, FixedPolicy
-from environments.autonomous_car import AutonomousCarNavigation
+from algorithms.utils import UniformProbabilisticPolicy
+from environments.simple_env import SimpleEnv
 
 
 def main():
@@ -16,13 +16,14 @@ def main():
     TOLL = 1e-3
     Ny = 21
     DISCOUNT = 0.95
-    NUM_SAMPLES = 1_000_000
+    NUM_SAMPLES = 100_000
 
     alphas = np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
-    world = AutonomousCarNavigation()
-    # policy = UniformProbabilisticPolicy(world)
-    _, prob_actions = pickle.load(open('algorithms/standard_vi.pkl', mode='rb'))
-    policy = FixedPolicy(world, prob_actions)
+    # world = AutonomousCarNavigation()
+    world = SimpleEnv()
+    policy = UniformProbabilisticPolicy(world)
+    # _, prob_actions = pickle.load(open('algorithms/standard_vi.pkl', mode='rb'))
+    # policy = FixedPolicy(world, prob_actions)
 
     random.seed(2)
     np.random.seed(2)

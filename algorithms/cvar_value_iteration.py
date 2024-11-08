@@ -6,6 +6,7 @@ from pulp import LpProblem, LpVariable, LpMinimize, LpStatusOptimal, LpStatus, C
 from tqdm import tqdm
 
 from environments.autonomous_car import AutonomousCarNavigation
+from environments.cliffwalker import GridWorld
 
 
 # IMPLEMENTATION OF VALUE ITERATION WHERE THE ENVIRONMENT HAS A REWARD IN THE FORM R(s,a,s')
@@ -239,8 +240,8 @@ def main():
     alphas = np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
 
     np.random.seed(2)
-    world = AutonomousCarNavigation()
-    # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    # world = AutonomousCarNavigation()
+    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
     if PERFORM_VI:
         V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL, alphas=alphas)
         pickle.dump((V, Policy), open('cvar_vi.pkl', mode='wb'))

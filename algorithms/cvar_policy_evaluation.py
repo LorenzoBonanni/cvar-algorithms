@@ -198,9 +198,9 @@ def cvar_value_update(world, V, Pol, id=0, alpha_set_all=None, discount=0.95):
             Q_ = Q[boolean_probs, :]
             V[:, s.id] = Q_.sum(axis=0)
         else:
+            policy_probs = policy_probs[policy_probs != 0]
             policy_probs = np.expand_dims(policy_probs, axis=1)
-            policy_probs = policy_probs.nonzero()
-            Q_ = Q[Q != -np.inf]
+            Q_ = Q[(Q != -np.inf).all(axis=1)]
             V[:, s.id] = (policy_probs * Q_).sum(axis=0)
     return V
 

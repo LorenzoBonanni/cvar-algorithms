@@ -161,6 +161,9 @@ class SimpleEnv:
 
         return all_transitions
 
+    def actions(self, s):
+        return self.ACTIONS
+
     def sample_transition(self, s, a):
         """ Sample a transition from state s given action a """
         transitions = self.transitions(s)[a]
