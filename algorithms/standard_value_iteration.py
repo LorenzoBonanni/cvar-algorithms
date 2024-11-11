@@ -64,13 +64,7 @@ def main():
         world = AutonomousCarNavigation()
         # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
         V, Policy = value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL)
-        # Policy_ = Policy.reshape(world.height, world.width).astype(str)
-        # for i in range(world.height):
-        #     for j in range(world.width):
-        #         Policy_[i, j] = world.ACTION_NAMES[int(Policy_[i, j])]
-        # print(Policy_)
-        print(V)
-        pickle.dump((V, Policy), open('standard_vi.pkl', mode='wb'))
+        pickle.dump((V, Policy), open('../policies/standard_vi.pkl', mode='wb'))
         world.generate_plots(Policy, V, 'standard_vi')
 if __name__ == '__main__':
     main()

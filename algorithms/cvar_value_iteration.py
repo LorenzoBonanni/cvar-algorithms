@@ -240,13 +240,13 @@ def main():
     alphas = np.concatenate(([0], np.logspace(-2, 0, Ny - 1)))
 
     np.random.seed(2)
-    # world = AutonomousCarNavigation()
-    world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
+    world = AutonomousCarNavigation()
+    # world = GridWorld(14, 16, random_action_p=0.05, path='gridworld3.png')
     if PERFORM_VI:
         V, Policy = cvar_value_iteration(world, max_iters=MAX_ITERS, eps_convergence=TOLL, alphas=alphas)
-        pickle.dump((V, Policy), open('cvar_vi.pkl', mode='wb'))
+        pickle.dump((V, Policy), open('../policies/cvar_vi.pkl', mode='wb'))
 
-    V, Policy = pickle.load(open('cvar_vi.pkl', mode='rb'))
+    V, Policy = pickle.load(open('../policies/cvar_vi.pkl', mode='rb'))
     for idx, alpha in enumerate(alphas):
         world.generate_plots(Policy[idx], V[idx], fr'$\alpha$={alpha}')
 
